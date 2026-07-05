@@ -1,0 +1,224 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --expo-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --expo-in: cubic-bezier(0.7, 0, 0.84, 0);
+
+  --bg: #ffffff;
+  --bg-soft: #f4f5f8;
+  --text: #23273d;
+  --text-muted: #454c70;
+  --card: #ffffff;
+  --border: rgba(35, 39, 61, 0.1);
+  --gold: #CEA945;
+  --gold-hover: #b89336;
+  --gold-grad-1: #CEA945;
+  --gold-grad-2: #e0be5f;
+
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #1a1d2e;
+  --bg-soft: #23273d;
+  --text: #ffffff;
+  --text-muted: #b6bcda;
+  --card: #2a2f4a;
+  --border: rgba(255, 255, 255, 0.1);
+  --gold: #ffc800;
+  --gold-hover: #e6b400;
+  --gold-grad-1: #ffc800;
+  --gold-grad-2: #ffe580;
+
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply font-sans antialiased;
+  background-color: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+::selection {
+  background: var(--gold);
+  color: #23273d;
+}
+
+/* ---------- Scrollbar ---------- */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-soft);
+}
+::-webkit-scrollbar-thumb {
+  background: #454c70;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gold);
+}
+
+/* ---------- Surface helpers ---------- */
+.surface {
+  background-color: var(--bg);
+}
+.surface-soft {
+  background-color: var(--bg-soft);
+}
+.text-body {
+  color: var(--text);
+}
+.text-muted {
+  color: var(--text-muted);
+}
+.card-surface {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+}
+
+/* ---------- Display headline (Fraunces, massive, tight) ---------- */
+.display-headline {
+  @apply font-display font-black tracking-tighter;
+  font-optical-sizing: auto;
+  line-height: 0.95;
+}
+
+/* ---------- Gold gradient text ---------- */
+.gold-gradient-text {
+  background: linear-gradient(120deg, var(--gold-grad-1) 20%, var(--gold-grad-2) 50%, var(--gold-grad-1) 80%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gold-shine 4s linear infinite;
+}
+@keyframes gold-shine {
+  to {
+    background-position: 200% center;
+  }
+}
+
+/* ---------- Grid background for physics canvases ---------- */
+.physics-grid-bg {
+  background-image:
+    linear-gradient(rgba(69, 76, 112, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(69, 76, 112, 0.14) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ---------- FlipText 3D characters ---------- */
+.flip-char {
+  animation: flip-char-anim var(--flip-duration, 2.2s) var(--expo-out)
+    var(--flip-delay, 0s) var(--flip-iteration, infinite) both;
+  backface-visibility: hidden;
+}
+@keyframes flip-char-anim {
+  0% {
+    transform: rotateX(-90deg);
+    opacity: 0;
+  }
+  18%,
+  80% {
+    transform: rotateX(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: rotateX(0deg);
+    opacity: 1;
+  }
+}
+
+/* ---------- Marquee (partners) ---------- */
+.marquee-mask {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 12%,
+    black 88%,
+    transparent
+  );
+}
+
+/* ---------- Aurora blobs ---------- */
+.aurora-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* ---------- Range input styling ---------- */
+input[type="range"].control-slider {
+  @apply h-1.5 w-full cursor-pointer appearance-none rounded-full;
+  background: linear-gradient(
+    to right,
+    var(--gold) 0%,
+    var(--gold) var(--progress, 50%),
+    rgba(69, 76, 112, 0.3) var(--progress, 50%),
+    rgba(69, 76, 112, 0.3) 100%
+  );
+}
+input[type="range"].control-slider::-webkit-slider-thumb {
+  @apply h-4 w-4 appearance-none rounded-full border-2 border-gold bg-white shadow-md;
+  -webkit-appearance: none;
+  transition: transform 0.15s ease;
+}
+input[type="range"].control-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+}
+input[type="range"].control-slider::-moz-range-thumb {
+  @apply h-4 w-4 rounded-full border-2 border-gold bg-white shadow-md;
+  border-style: solid;
+}
+
+/* ---------- Swiper testimonial carousel ---------- */
+.testimonial-swiper {
+  width: 100%;
+  padding-top: 20px !important;
+  padding-bottom: 56px !important;
+}
+.testimonial-swiper .swiper-slide {
+  width: 480px;
+  max-width: 88vw;
+  height: auto;
+}
+.testimonial-swiper .swiper-pagination-bullet {
+  background-color: var(--text-muted) !important;
+  opacity: 0.4;
+}
+.testimonial-swiper .swiper-pagination-bullet-active {
+  background-color: var(--gold) !important;
+  opacity: 1;
+}
+
+/* ---------- Nav glass ---------- */
+.nav-glass {
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
