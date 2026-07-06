@@ -52,10 +52,15 @@ export function Partners() {
   });
 
   return (
-    <section className="relative overflow-hidden surface py-20 transition-colors duration-500">
+    <section className="relative overflow-hidden bg-cloud dark:bg-slate-ink pt-2 pb-10 transition-colors duration-500">
       {/* Aurora background */}
-      <div className="aurora-blob right-[-10%] top-[-10%] h-[380px] w-[380px] bg-gold/15 dark:bg-gold/8" />
-      <div className="aurora-blob left-[-10%] bottom-[-10%] h-[380px] w-[380px] bg-indigo-500/10 dark:bg-indigo-500/8" />
+      {/* Left side blobs */}
+      <div className="aurora-blob left-[-10%] top-[5%] h-[300px] w-[300px] bg-indigo-500/15 dark:bg-indigo-500/8" />
+      <div className="aurora-blob left-[-5%] bottom-[5%] h-[280px] w-[280px] bg-gold/20 dark:bg-gold/10" />
+
+      {/* Right side blobs */}
+      <div className="aurora-blob right-[-10%] top-[5%] h-[300px] w-[300px] bg-gold/20 dark:bg-gold/10" />
+      <div className="aurora-blob right-[-5%] bottom-[5%] h-[280px] w-[280px] bg-indigo-500/15 dark:bg-indigo-500/8" />
 
       {/* Dotted texture */}
       <div
@@ -78,7 +83,7 @@ export function Partners() {
                 Global academic{" "}
               </span>
               <span className="font-display italic font-semibold text-gold">
-                partners.
+                Partners.
               </span>
             </h2>
           </div>
@@ -95,18 +100,16 @@ export function Partners() {
                 <img
                   src={partnerLogos[0].src}
                   alt={partnerLogos[0].alt}
-                  className={`max-h-20 md:max-h-24 max-w-[95%] object-contain opacity-75 hover:opacity-100 transition-opacity duration-300 ${
-                    isDark ? "brightness-0 invert" : ""
-                  }`}
+                  className={`max-h-20 md:max-h-24 max-w-[95%] object-contain opacity-75 hover:opacity-100 transition-opacity duration-300 ${isDark ? "brightness-0 invert" : ""
+                    }`}
                 />
               </div>
               <div style={faceStyle(true)}>
                 <img
                   src={partnerLogos[1].src}
                   alt={partnerLogos[1].alt}
-                  className={`max-h-20 md:max-h-24 max-w-[95%] object-contain opacity-75 hover:opacity-100 transition-opacity duration-300 ${
-                    isDark ? "brightness-125" : ""
-                  }`}
+                  className={`max-h-20 md:max-h-24 max-w-[95%] object-contain opacity-75 hover:opacity-100 transition-opacity duration-300 ${isDark ? "brightness-125" : ""
+                    }`}
                 />
               </div>
             </div>
@@ -119,18 +122,16 @@ export function Partners() {
                 <img
                   src={partnerLogos[3].src}
                   alt={partnerLogos[3].alt}
-                  className={`max-h-20 md:max-h-24 max-w-[95%] object-contain opacity-75 hover:opacity-100 transition-opacity duration-300 ${
-                    isDark ? "brightness-125" : ""
-                  }`}
+                  className={`max-h-20 md:max-h-24 max-w-[95%] object-contain opacity-75 hover:opacity-100 transition-opacity duration-300 ${isDark ? "brightness-125" : ""
+                    }`}
                 />
               </div>
               <div style={faceStyle(true)}>
                 <img
                   src={partnerLogos[4].src}
                   alt={partnerLogos[4].alt}
-                  className={`max-h-20 md:max-h-24 max-w-[95%] object-contain opacity-75 hover:opacity-100 transition-opacity duration-300 ${
-                    isDark ? "brightness-125" : ""
-                  }`}
+                  className={`max-h-20 md:max-h-24 max-w-[95%] object-contain opacity-75 hover:opacity-100 transition-opacity duration-300 ${isDark ? "brightness-125" : ""
+                    }`}
                 />
               </div>
             </div>
@@ -143,18 +144,16 @@ export function Partners() {
                 <img
                   src={partnerLogos[2].src}
                   alt={partnerLogos[2].alt}
-                  className={`max-h-20 md:max-h-24 max-w-[95%] object-contain opacity-75 hover:opacity-100 transition-opacity duration-300 ${
-                    isDark ? "brightness-0 invert" : ""
-                  }`}
+                  className={`max-h-20 md:max-h-24 max-w-[95%] object-contain opacity-75 hover:opacity-100 transition-opacity duration-300 ${isDark ? "brightness-0 invert" : ""
+                    }`}
                 />
               </div>
               <div style={faceStyle(true)}>
                 <img
                   src={partnerLogos[5].src}
                   alt={partnerLogos[5].alt}
-                  className={`max-h-20 md:max-h-24 max-w-[95%] object-contain opacity-75 hover:opacity-100 transition-opacity duration-300 ${
-                    isDark ? "brightness-125" : ""
-                  }`}
+                  className={`max-h-20 md:max-h-24 max-w-[95%] object-contain opacity-75 hover:opacity-100 transition-opacity duration-300 ${isDark ? "brightness-125" : ""
+                    }`}
                 />
               </div>
             </div>

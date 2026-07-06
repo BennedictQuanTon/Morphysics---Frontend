@@ -21,7 +21,7 @@ export function Hero() {
   return (
     <section
       id="hero"
-      className="relative flex min-h-screen items-center overflow-hidden bg-cloud dark:bg-slate-ink pb-16 pt-28 text-slate-deep dark:text-white lg:pt-24 transition-colors duration-500"
+      className="relative flex min-h-screen items-center overflow-hidden bg-cloud dark:bg-slate-ink pb-2 pt-28 text-slate-deep dark:text-white lg:pt-24 transition-colors duration-500"
     >
       {/* Aurora background */}
       <motion.div

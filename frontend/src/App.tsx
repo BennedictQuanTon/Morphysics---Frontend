@@ -2,6 +2,7 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Hero } from "@/sections/Hero";
+import { SolenoidTransition } from "@/sections/SolenoidTransition";
 import { Partners } from "@/sections/Partners";
 import { ProductOverview } from "@/sections/ProductOverview";
 import { Problem } from "@/sections/Problem";
@@ -16,6 +17,7 @@ export default function App() {
       <Navbar />
       <main>
         <Hero />
+        <SolenoidTransition />
         <Partners />
         <ProductOverview />
         <Problem />

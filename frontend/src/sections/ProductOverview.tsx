@@ -159,7 +159,7 @@ export function ProductOverview() {
   const rightOpacity = useTransform(scrollYProgress, [0.1, 0.3], [0, 1]);
 
   return (
-    <section className="relative overflow-x-clip bg-cloud dark:bg-slate-ink pt-24 pb-0 sm:pt-28 sm:pb-0 transition-colors duration-500 text-slate-deep dark:text-white">
+    <section className="relative overflow-x-clip bg-cloud dark:bg-slate-ink pt-10 pb-0 sm:pt-12 sm:pb-0 transition-colors duration-500 text-slate-deep dark:text-white">
       {/* Aurora background */}
       <div className="aurora-blob right-[-10%] top-[5%] h-[500px] w-[500px] bg-gold/20 dark:bg-gold/10" />
       <div className="aurora-blob left-[-15%] bottom-[10%] h-[400px] w-[400px] bg-gold/15 dark:bg-gold/8" />
