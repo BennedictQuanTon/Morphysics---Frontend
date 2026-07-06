@@ -6,9 +6,9 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Player } from "@lottiefiles/react-lottie-player";
 
 const NAV_ITEMS = [
-  { label: "Assets", href: "#" },
-  { label: "FAQ", href: "#" },
-  { label: "About Us", href: "#" },
+  { label: "Assets", href: "#assets" },
+  { label: "FAQ", href: "#faq" },
+  { label: "About Us", href: "#about" },
 ];
 
 /**
@@ -19,11 +19,29 @@ const NAV_ITEMS = [
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const [hovering, setHovering] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const spotlightX = useRef(0);
   const ambienceX = useRef(0);
+
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash;
+      if (hash === "#about") {
+        setActiveIndex(2);
+      } else if (hash === "#faq") {
+        setActiveIndex(1);
+      } else if (hash === "#assets") {
+        setActiveIndex(0);
+      } else {
+        setActiveIndex(-1);
+      }
+    };
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -31,6 +49,36 @@ export function Navbar() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string, idx: number) => {
+    e.preventDefault();
+    setActiveIndex(idx);
+    setDrawerOpen(false);
+
+    if (href === "#about") {
+      window.location.hash = "#about";
+    } else {
+      if (window.location.hash === "#about") {
+        window.location.hash = href;
+        setTimeout(() => {
+          const target = document.querySelector(href);
+          if (target) {
+            target.scrollIntoView({ behavior: "smooth" });
+          } else {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        }, 100);
+      } else {
+        window.location.hash = href;
+        const target = document.querySelector(href);
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth" });
+        } else {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }
+    }
+  };
 
   useEffect(() => {
     const nav = navRef.current;
@@ -91,11 +139,7 @@ export function Navbar() {
     }
   }, [activeIndex]);
 
-  const scrollTo = (href: string) => {
-    if (href.startsWith("#") && href.length > 1) {
-      document.querySelector(href)?.scrollIntoView({ behavior: "smooth" });
-    }
-  };
+
 
   return (
     <>
@@ -111,7 +155,11 @@ export function Navbar() {
             href="#hero"
             onClick={(e) => {
               e.preventDefault();
-              window.scrollTo({ top: 0, behavior: "smooth" });
+              if (window.location.hash === "#about") {
+                window.location.hash = "";
+              } else {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }
             }}
             className="group flex items-center gap-1"
           >
@@ -144,11 +192,7 @@ export function Navbar() {
                   <a
                     href={item.href}
                     data-index={idx}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setActiveIndex(idx);
-                      scrollTo(item.href);
-                    }}
+                    onClick={(e) => handleNavClick(e, item.href, idx)}
                     className={cn(
                       "rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-200",
                       activeIndex === idx
@@ -173,8 +217,9 @@ export function Navbar() {
             />
             {/* Active-item ambience line */}
             <div
-              className="pointer-events-none absolute bottom-0 left-0 z-[2] h-[2px] w-full"
+              className="pointer-events-none absolute bottom-0 left-0 z-[2] h-[2px] w-full transition-opacity duration-300"
               style={{
+                opacity: activeIndex === -1 ? 0 : 1,
                 background:
                   "radial-gradient(60px circle at var(--ambience-x, 50%) 0%, var(--ambience-color) 0%, transparent 100%)",
               }}
@@ -236,16 +281,17 @@ export function Navbar() {
                   <X className="h-6 w-6" />
                 </button>
               </div>
-              {NAV_ITEMS.map((item) => (
+              {NAV_ITEMS.map((item, idx) => (
                 <a
                   key={item.label}
                   href={item.href}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setDrawerOpen(false);
-                    scrollTo(item.href);
-                  }}
-                  className="rounded-xl px-4 py-3 text-base font-semibold transition-colors hover:bg-gold/10 hover:text-gold-hover"
+                  onClick={(e) => handleNavClick(e, item.href, idx)}
+                  className={cn(
+                    "rounded-xl px-4 py-3 text-base font-semibold transition-colors",
+                    activeIndex === idx
+                      ? "bg-gold/10 text-gold-hover"
+                      : "hover:bg-gold/10 hover:text-gold-hover"
+                  )}
                 >
                   {item.label}
                 </a>

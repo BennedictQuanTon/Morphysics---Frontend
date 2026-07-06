@@ -7,7 +7,7 @@ import { Reveal } from "@/components/ui/Reveal";
 import { cn } from "@/lib/utils";
 
 const inputClass =
-  "w-full rounded-xl border bg-transparent px-4 py-3 text-sm outline-none transition-all placeholder:opacity-50 focus:border-gold focus:ring-2 focus:ring-gold/25";
+  "w-full rounded-xl border bg-transparent px-4 py-3.5 text-base outline-none transition-all placeholder:opacity-50 focus:border-gold focus:ring-2 focus:ring-gold/25";
 
 export function Contact() {
   const [submitted, setSubmitted] = useState(false);
@@ -65,7 +65,7 @@ export function Contact() {
 
       <div className="mx-auto grid max-w-7xl gap-14 px-6 sm:px-8 lg:grid-cols-2 lg:gap-20 lg:px-12 relative z-10">
         {/* Left: info */}
-        <Reveal>
+        <Reveal className="flex flex-col h-full">
           <div className="flex items-center justify-between gap-6 flex-wrap sm:flex-nowrap">
             <div className="flex-1">
               <span className="text-gold text-sm sm:text-base font-extrabold uppercase tracking-[0.22em] mb-3 block">
@@ -98,43 +98,43 @@ export function Contact() {
             school, or just curious? We're happy to hear from you.
           </p>
 
-          <div className="mt-9 space-y-5">
+          <div className="lg:mt-auto lg:pt-8 mt-9 space-y-6">
             <div className="flex items-center gap-4">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold-hover dark:text-gold">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold/15 text-gold-hover dark:text-gold">
                 <Mail className="h-5 w-5" />
               </span>
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider opacity-50">
+                <p className="text-sm font-bold uppercase tracking-wider opacity-60">
                   Email
                 </p>
                 <a
                   href="mailto:hello@morphysics.io"
-                  className="font-semibold hover:text-gold-hover dark:hover:text-gold"
+                  className="text-base sm:text-lg font-semibold hover:text-gold-hover dark:hover:text-gold"
                 >
                   hello@morphysics.io
                 </a>
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold-hover dark:text-gold">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold/15 text-gold-hover dark:text-gold">
                 <MapPin className="h-5 w-5" />
               </span>
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider opacity-50">
+                <p className="text-sm font-bold uppercase tracking-wider opacity-60">
                   Location
                 </p>
-                <p className="font-semibold">Ho Chi Minh City, Vietnam</p>
+                <p className="text-base sm:text-lg font-semibold">Ho Chi Minh City, Vietnam</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold-hover dark:text-gold">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold/15 text-gold-hover dark:text-gold">
                 <Clock className="h-5 w-5" />
               </span>
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider opacity-50">
+                <p className="text-sm font-bold uppercase tracking-wider opacity-60">
                   Response time
                 </p>
-                <p className="font-semibold">
+                <p className="text-base sm:text-lg font-semibold">
                   We typically reply within 1 business day.
                 </p>
               </div>
@@ -145,8 +145,8 @@ export function Contact() {
         </Reveal>
 
         {/* Right: form */}
-        <Reveal delay={0.15}>
-          <div className="card-surface relative overflow-hidden rounded-3xl p-8 shadow-lg">
+        <Reveal delay={0.15} className="h-full">
+          <div className="card-surface relative overflow-hidden rounded-3xl p-8 shadow-lg h-full flex flex-col justify-center">
             <AnimatePresence mode="wait">
               {submitted ? (
                 <motion.div
@@ -262,7 +262,7 @@ export function Contact() {
                     type="submit"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.97 }}
-                    className="mt-1 flex items-center justify-center gap-2 rounded-xl bg-gold py-3.5 font-bold text-slate-deep shadow-lg shadow-gold/25 transition-colors hover:bg-gold-hover"
+                    className="mt-1 flex items-center justify-center gap-2 rounded-xl bg-gold py-3.5 text-base font-bold text-slate-deep shadow-lg shadow-gold/25 transition-colors hover:bg-gold-hover"
                   >
                     <Send className="h-4 w-4" />
                     Send Message

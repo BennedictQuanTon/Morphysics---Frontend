@@ -1,10 +1,10 @@
 import { Player } from "@lottiefiles/react-lottie-player";
-import { Atom, Facebook, Github, Youtube } from "lucide-react";
+import { Atom, Facebook, Github } from "lucide-react";
 
 const columns = [
   {
     title: "Product",
-    links: ["Physics Playground", "Pricing", "Assets", "Changelog"],
+    links: ["Pricing", "Assets"],
   },
   {
     title: "Company",
@@ -50,8 +50,8 @@ export function Footer() {
                   <li key={link}>
                     <a
                       href={
-                        link === "Physics Playground"
-                          ? "#playground"
+                        link === "About Us"
+                          ? "#about"
                           : link === "Pricing"
                             ? "#pricing"
                             : link === "Contact"
@@ -92,7 +92,7 @@ export function Footer() {
               </li>
             </ul>
             <div className="mt-5 flex gap-3">
-              {[Facebook, Youtube, Github].map((Icon, i) => (
+              {[Facebook, Github].map((Icon, i) => (
                 <a
                   key={i}
                   href="#"
