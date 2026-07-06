@@ -11,9 +11,7 @@ import {
   LogOut,
   Trash2,
   Send,
-  Paperclip,
   Image as ImageIcon,
-  Sparkles,
   Play,
   Pause,
   RotateCcw
@@ -48,7 +46,7 @@ export function Dashboard({ currentHash }: { currentHash: string }) {
     {
       id: "welcome",
       sender: "bot",
-      text: "Hi there! 👋 I am your MorPhysics AI Assistant. I can build and explore interactive physics models in real time.\n\nChoose one of the quick setups below or describe a custom physics problem to get started!",
+      text: "Hey there! 👋 I'm MorPhysics, your personal physics lab assistant.\n\nJust send me a request and I'll build an interactive experiment for you — whether it's projectile motion, a double pendulum, elastic collisions, or planetary orbits. What would you like to explore?",
       timestamp: new Date(),
     },
   ]);
@@ -105,9 +103,11 @@ export function Dashboard({ currentHash }: { currentHash: string }) {
     trail: [] as Array<{ x: number; y: number }>,
   });
 
-  // Scroll to bottom of chat
+  // Scroll to bottom of chat — skip on initial welcome message to preserve top padding
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messages.length > 1) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   // Handle Scenario trigger
@@ -161,7 +161,7 @@ export function Dashboard({ currentHash }: { currentHash: string }) {
       {
         id: "welcome",
         sender: "bot",
-        text: "Hi there! 👋 I am your MorPhysics AI Assistant. I can build and explore interactive physics models in real time.\n\nChoose one of the quick setups below or describe a custom physics problem to get started!",
+        text: "Hey there! 👋 I'm MorPhysics, your personal physics lab assistant.\n\nJust send me a request and I'll build an interactive experiment for you — whether it's projectile motion, a double pendulum, elastic collisions, or planetary orbits. What would you like to explore?",
         timestamp: new Date(),
       },
     ]);
@@ -771,14 +771,17 @@ export function Dashboard({ currentHash }: { currentHash: string }) {
   };
 
   return (
-    <section className="relative h-screen bg-indigo-50/40 dark:bg-slate-ink text-slate-deep dark:text-white transition-colors duration-500 overflow-hidden font-sans">
-      {/* Background aurora gradients */}
-      <div className="aurora-blob right-[-10%] top-[-5%] h-[300px] w-[300px] bg-gold/15 dark:bg-gold/8 pointer-events-none" />
-      <div className="aurora-blob left-[-10%] bottom-[-5%] h-[300px] w-[300px] bg-indigo-500/10 dark:bg-indigo-500/8 pointer-events-none" />
+    <section className="relative h-screen bg-cloud dark:bg-slate-ink text-slate-deep dark:text-white transition-colors duration-500 overflow-hidden font-sans">
+      {/* Background aurora gradients — Hero-style multi-blob */}
+      <div className="aurora-blob left-[-12%] top-[-15%] h-[500px] w-[500px] bg-gold/20 dark:bg-gold/10 pointer-events-none" />
+      <div className="aurora-blob bottom-[-15%] right-[-8%] h-[560px] w-[560px] bg-indigo-500/25 dark:bg-indigo-500/18 pointer-events-none" />
+      <div className="aurora-blob right-[-8%] top-[-5%] h-[420px] w-[420px] bg-gold/15 dark:bg-gold/8 pointer-events-none" />
+      <div className="aurora-blob left-[30%] top-[30%] h-[360px] w-[360px] bg-indigo-400/12 dark:bg-indigo-500/10 pointer-events-none" />
+      <div className="aurora-blob left-[33%] top-[50%] h-[280px] w-[280px] bg-rose-400/6 dark:bg-rose-400/10 pointer-events-none" />
 
       {/* Dotted texture */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-20 dark:opacity-10 z-0"
+        className="pointer-events-none absolute inset-0 opacity-35 dark:opacity-15 z-0"
         style={{
           backgroundImage:
             "radial-gradient(var(--dot-color, rgba(35,39,61,0.08)) 1px, transparent 1px)",
@@ -911,86 +914,44 @@ export function Dashboard({ currentHash }: { currentHash: string }) {
           </ul>
         </nav>
 
-        {/* Right Side: Toggle + Logout */}
+        {/* Right Side: Toggle */}
         <div className="flex items-center gap-3.5 z-10">
           <ThemeToggle className="size-9 p-1 shadow-sm" />
-
-          {/* Logout Action */}
-          <button
-            type="button"
-            onClick={() => {
-              window.location.hash = "";
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-deep/10 bg-white/40 dark:border-white/10 dark:bg-white/5 text-slate-gray dark:text-white/70 hover:border-gold hover:text-gold dark:hover:border-gold dark:hover:text-gold transition-all duration-300 text-xs font-bold cursor-pointer"
-          >
-            <LogOut className="size-4" />
-            <span className="hidden sm:inline">Sign Out</span>
-          </button>
         </div>
       </header>
 
-      {/* Main Container below navbar */}
-      <div className="relative z-10 h-[calc(100vh-4rem)] mt-16 overflow-hidden">
+      {/* Main Container below navbar — sits below the fixed 64px header */}
+      <div className="absolute inset-0 top-16 z-10 overflow-hidden">
         {activeTab === "lab" ? (
           // PAGE: INTERACTIVE LAB (Split view fitting screen height)
-          <div className="h-full w-full flex flex-col lg:flex-row gap-5 p-5 xl:p-6 overflow-hidden max-w-7xl mx-auto">
+          <div className="h-full w-full flex flex-col lg:flex-row overflow-hidden">
             
             {/* Left Chatbot Column */}
-            <div className="flex flex-col w-full lg:w-[420px] xl:w-[460px] h-[360px] lg:h-full bg-white dark:bg-[#1f2236]/90 border border-slate-deep/5 dark:border-white/5 shadow-md rounded-3xl overflow-hidden relative transition-colors duration-500">
+            <div className="flex flex-col w-full lg:w-[400px] xl:w-[440px] shrink-0 h-[50vh] lg:h-full bg-white dark:bg-[#1a1d2e] border-r border-slate-deep/10 dark:border-white/10 overflow-hidden relative transition-colors duration-500">
               
-              {/* Chat Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-deep/5 dark:border-white/5 bg-white/50 dark:bg-white/2">
-                <div className="flex items-center gap-3">
-                  <div className="size-9 flex items-center justify-center rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 p-0.5 border border-gold/15">
-                    <Player
-                      autoplay
-                      loop
-                      src="/assets/Mascot.json"
-                      style={{ height: "30px", width: "30px" }}
-                    />
-                  </div>
-                  <div>
-                    <h3 className="font-sans text-sm font-bold text-slate-deep dark:text-white">
-                      MorPhysics Bot
-                    </h3>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-[10px] text-slate-gray/80 dark:text-white/55 font-semibold">
-                        Online Physicist
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Reset chat button */}
-                <button
-                  type="button"
-                  title="Clear chat history"
-                  onClick={handleClearChat}
-                  className="p-1.5 rounded-lg border border-slate-deep/5 bg-slate-soft/30 dark:border-white/5 dark:bg-white/5 text-slate-gray dark:text-white/60 hover:text-red-400 dark:hover:text-red-400 transition-colors"
-                >
-                  <Trash2 className="size-4" />
-                </button>
-              </div>
-
               {/* Chat Messages Log */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-4 min-h-0">
+              <div className="flex-1 overflow-y-auto p-5 space-y-5 min-h-0">
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
                     className={cn(
-                      "flex gap-3 text-sm",
+                      "flex gap-3 text-base font-sans",
                       msg.sender === "user" ? "justify-end" : "justify-start"
                     )}
                   >
                     {msg.sender === "bot" && (
-                      <div className="size-7 rounded-full bg-gold/10 dark:bg-gold/5 border border-gold/20 flex items-center justify-center text-gold font-bold shrink-0 mt-0.5">
-                        M
+                      <div className="size-8 flex items-center justify-center rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 p-0.5 border border-gold/15 shrink-0 mt-0.5">
+                        <Player
+                          autoplay
+                          loop
+                          src="/assets/Mascot.json"
+                          style={{ height: "24px", width: "24px" }}
+                        />
                       </div>
                     )}
                     <div
                       className={cn(
-                        "rounded-2xl px-4 py-3 max-w-[80%] whitespace-pre-line leading-relaxed",
+                        "rounded-2xl px-4 py-3 max-w-[80%] whitespace-pre-line leading-relaxed text-base font-sans",
                         msg.sender === "user"
                           ? "bg-gold/15 dark:bg-gold/10 border border-gold/20 dark:border-gold/10 text-slate-deep dark:text-white font-medium rounded-tr-none"
                           : "bg-indigo-50/50 dark:bg-slate-ink/50 border border-slate-deep/5 dark:border-white/5 text-slate-deep dark:text-white/90 rounded-tl-none"
@@ -1003,64 +964,22 @@ export function Dashboard({ currentHash }: { currentHash: string }) {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Quick suggestions pills */}
-              <div className="px-4 py-2 border-t border-slate-deep/5 dark:border-white/5 bg-slate-50/50 dark:bg-slate-ink/30 overflow-x-auto flex items-center gap-2 scrollbar-none whitespace-nowrap">
-                <button
-                  type="button"
-                  onClick={() => handleSelectScenario("projectile")}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-bold transition-all shrink-0",
-                    activeScenario === "projectile"
-                      ? "border-gold bg-gold/10 text-gold"
-                      : "border-slate-deep/5 dark:border-white/5 bg-white dark:bg-slate-ink/80 text-slate-gray dark:text-white/70 hover:border-gold/50 hover:text-gold"
-                  )}
-                >
-                  <span className="text-[9px]">🔴</span> Projectile Launcher
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectScenario("pendulum")}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-bold transition-all shrink-0",
-                    activeScenario === "pendulum"
-                      ? "border-gold bg-gold/10 text-gold"
-                      : "border-slate-deep/5 dark:border-white/5 bg-white dark:bg-slate-ink/80 text-slate-gray dark:text-white/70 hover:border-gold/50 hover:text-gold"
-                  )}
-                >
-                  <span className="text-[9px]">🔬</span> Double Pendulum
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectScenario("collisions")}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-bold transition-all shrink-0",
-                    activeScenario === "collisions"
-                      ? "border-gold bg-gold/10 text-gold"
-                      : "border-slate-deep/5 dark:border-white/5 bg-white dark:bg-slate-ink/80 text-slate-gray dark:text-white/70 hover:border-gold/50 hover:text-gold"
-                  )}
-                >
-                  <span className="text-[9px]">💥</span> Elastic Collisions
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectScenario("orbit")}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-bold transition-all shrink-0",
-                    activeScenario === "orbit"
-                      ? "border-gold bg-gold/10 text-gold"
-                      : "border-slate-deep/5 dark:border-white/5 bg-white dark:bg-slate-ink/80 text-slate-gray dark:text-white/70 hover:border-gold/50 hover:text-gold"
-                  )}
-                >
-                  <span className="text-[9px]">🪐</span> Planetary Orbit
-                </button>
-              </div>
-
               {/* Chat Input Field Form */}
               <form
                 onSubmit={handleSendMessage}
-                className="p-4 border-t border-slate-deep/5 dark:border-white/5 bg-white dark:bg-[#1f2236] flex items-center gap-2.5"
+                className="p-4 border-t border-slate-deep/5 dark:border-white/5 bg-white dark:bg-[#1a1d2e] flex items-center gap-2.5"
               >
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* Reset chat button */}
+                  <button
+                    type="button"
+                    title="Clear chat history"
+                    onClick={handleClearChat}
+                    className="p-2 rounded-xl text-slate-gray/70 hover:text-red-400 dark:text-white/50 dark:hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 className="size-5" />
+                  </button>
+
                   {/* Upload Image */}
                   <button
                     type="button"
@@ -1069,14 +988,6 @@ export function Dashboard({ currentHash }: { currentHash: string }) {
                   >
                     <ImageIcon className="size-5" />
                   </button>
-                  {/* Attach files */}
-                  <button
-                    type="button"
-                    title="Attach data file"
-                    className="p-2 rounded-xl text-slate-gray/70 hover:text-gold dark:text-white/50 dark:hover:text-gold transition-colors"
-                  >
-                    <Paperclip className="size-5" />
-                  </button>
                 </div>
 
                 <input
@@ -1084,7 +995,7 @@ export function Dashboard({ currentHash }: { currentHash: string }) {
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder="Ask AI or type 'projectile motion'..."
-                  className="flex-1 px-4 py-2.5 rounded-2xl border border-slate-deep/10 dark:border-white/10 bg-white/50 dark:bg-slate-ink/40 text-slate-deep dark:text-white focus:outline-none focus:border-gold dark:focus:border-gold text-sm transition-all"
+                  className="flex-1 px-4 py-2.5 rounded-2xl border border-slate-deep/10 dark:border-white/10 bg-white/50 dark:bg-slate-ink/40 text-slate-deep dark:text-white focus:outline-none focus:border-gold dark:focus:border-gold text-base transition-all font-sans"
                 />
 
                 {/* Send action */}
@@ -1099,50 +1010,8 @@ export function Dashboard({ currentHash }: { currentHash: string }) {
             </div>
 
             {/* Right Simulation Column */}
-            <div className="flex-1 flex flex-col h-full bg-white dark:bg-[#1f2236]/90 border border-slate-deep/5 dark:border-white/5 shadow-md rounded-3xl overflow-hidden transition-colors duration-500">
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
               
-              {/* Simulation Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-deep/5 dark:border-white/5 bg-white/50 dark:bg-white/2">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="size-5 text-gold fill-gold/20" />
-                  <span className="font-sans text-sm font-extrabold text-slate-deep dark:text-white">
-                    Simulation Canvas
-                  </span>
-                </div>
-
-                {/* Scenario details or resets */}
-                {activeScenario !== "none" && (
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setIsPlaying(!isPlaying)}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-extrabold transition-all",
-                        isPlaying
-                          ? "border-amber-500 bg-amber-500/10 text-amber-500"
-                          : "border-emerald-500 bg-emerald-500/10 text-emerald-500"
-                      )}
-                    >
-                      {isPlaying ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
-                      {isPlaying ? "Pause" : "Resume"}
-                    </button>
-                    <button
-                      type="button"
-                      title="Reset scenario"
-                      onClick={() => {
-                        // Triggers useEffect reset
-                        const prev = activeScenario;
-                        setActiveScenario("none");
-                        setTimeout(() => setActiveScenario(prev), 20);
-                      }}
-                      className="p-1.5 rounded-xl border border-slate-deep/5 bg-slate-soft/30 dark:border-white/5 dark:bg-white/5 text-slate-gray dark:text-white/60 hover:text-gold dark:hover:text-gold transition-colors"
-                    >
-                      <RotateCcw className="size-3.5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
               {/* Canvas Physics Workspace */}
               <div
                 ref={canvasContainerRef}
@@ -1168,24 +1037,56 @@ export function Dashboard({ currentHash }: { currentHash: string }) {
                     <h4 className="font-sans text-lg font-bold text-slate-deep dark:text-white mb-2">
                       Simulation is Idle
                     </h4>
-                    <p className="text-xs text-slate-gray/80 dark:text-white/50 leading-relaxed font-sans px-4">
-                      Enter a prompt or click one of the quick suggestions in the chat to generate and run a live physics simulation.
+                    <p className="text-sm text-slate-gray/80 dark:text-white/50 leading-relaxed font-sans px-4">
+                      Enter a prompt or click the play button above to start a live physics simulation.
                     </p>
                   </div>
                 )}
               </div>
 
-              {/* Simulation Status Metrics Bar */}
-              <div className="grid grid-cols-4 border-t border-slate-deep/5 dark:border-white/5 bg-white/50 dark:bg-white/2 select-none">
-                {/* Gravity */}
-                <div className="flex flex-col items-center justify-center py-3.5 border-r border-slate-deep/5 dark:border-white/5">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-gray/70 dark:text-white/40 mb-1">
-                    Gravity
-                  </span>
-                  <span className="text-xs sm:text-sm font-extrabold text-gold">
-                    {gravity.toFixed(1)} m/s²
-                  </span>
-                  {activeScenario !== "none" && (
+              {/* Simulation Controls Bar — only shown when a scenario is active */}
+              {activeScenario !== "none" && (
+                <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-3 border-t border-slate-deep/5 dark:border-white/5 bg-white/50 dark:bg-white/2 select-none">
+                  {/* Play/Pause & Reset */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsPlaying(!isPlaying)}
+                      className={cn(
+                        "flex items-center justify-center p-2 rounded-xl border text-xs font-bold transition-all shadow-sm",
+                        isPlaying
+                          ? "border-amber-500 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20"
+                          : "border-emerald-500 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
+                      )}
+                      title={isPlaying ? "Pause simulation" : "Resume simulation"}
+                    >
+                      {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
+                    </button>
+
+                    <button
+                      type="button"
+                      title="Reset simulation"
+                      onClick={() => {
+                        const prev = activeScenario;
+                        setActiveScenario("none");
+                        setTimeout(() => setActiveScenario(prev), 20);
+                      }}
+                      className="p-2 rounded-xl border border-slate-deep/5 bg-slate-soft/30 dark:border-white/5 dark:bg-white/5 text-slate-gray dark:text-white/60 hover:text-gold dark:hover:text-gold transition-colors"
+                    >
+                      <RotateCcw className="size-4" />
+                    </button>
+                  </div>
+
+                  {/* Gravity Slider */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-gray/70 dark:text-white/40">
+                        Gravity
+                      </span>
+                      <span className="text-xs font-extrabold text-gold">
+                        {gravity.toFixed(1)} m/s²
+                      </span>
+                    </div>
                     <input
                       type="range"
                       min={0}
@@ -1193,38 +1094,11 @@ export function Dashboard({ currentHash }: { currentHash: string }) {
                       step={0.5}
                       value={gravity}
                       onChange={(e) => setGravity(parseFloat(e.target.value))}
-                      className="w-16 sm:w-20 h-1 mt-1.5 accent-gold cursor-pointer"
+                      className="w-20 sm:w-24 h-1 accent-gold cursor-pointer"
                     />
-                  )}
+                  </div>
                 </div>
-                {/* Active Bodies */}
-                <div className="flex flex-col items-center justify-center py-3.5 border-r border-slate-deep/5 dark:border-white/5">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-gray/70 dark:text-white/40 mb-1">
-                    Active Bodies
-                  </span>
-                  <span className="text-xs sm:text-sm font-extrabold text-sky-400">
-                    {activeBodies}
-                  </span>
-                </div>
-                {/* Total Energy */}
-                <div className="flex flex-col items-center justify-center py-3.5 border-r border-slate-deep/5 dark:border-white/5">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-gray/70 dark:text-white/40 mb-1">
-                    Total Energy
-                  </span>
-                  <span className="text-xs sm:text-sm font-extrabold text-emerald-400">
-                    {totalEnergy} J
-                  </span>
-                </div>
-                {/* Engine FPS */}
-                <div className="flex flex-col items-center justify-center py-3.5">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-gray/70 dark:text-white/40 mb-1">
-                    Engine FPS
-                  </span>
-                  <span className="text-xs sm:text-sm font-extrabold text-purple-400">
-                    {activeScenario !== "none" && isPlaying ? fps : 0}
-                  </span>
-                </div>
-              </div>
+              )}
 
             </div>
 
