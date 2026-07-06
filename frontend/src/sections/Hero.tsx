@@ -12,9 +12,9 @@ export function Hero() {
   const blobY = useTransform(scrollY, [0, 600], [0, 140]);
   const blobY2 = useTransform(scrollY, [0, 600], [0, -100]);
 
-  const scrollToPlayground = () => {
+  const scrollToOverview = () => {
     document
-      .querySelector("#playground")
+      .querySelector("#overview")
       ?.scrollIntoView({ behavior: "smooth" });
   };
 
@@ -76,7 +76,7 @@ export function Hero() {
             className="mt-9 flex flex-wrap items-center gap-4"
           >
             <RadialGlowButton>Try it Free</RadialGlowButton>
-            <AnimatedButton onClick={scrollToPlayground}>
+            <AnimatedButton onClick={scrollToOverview}>
               <MousePointerClick className="h-4 w-4" />
               Watch the Demo
             </AnimatedButton>
