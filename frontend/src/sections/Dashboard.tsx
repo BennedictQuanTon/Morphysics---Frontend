@@ -861,113 +861,124 @@ export function Dashboard({ currentHash }: { currentHash: string }) {
       />
 
       {/* Workspace Navbar */}
-      <header className="fixed inset-x-0 top-0 z-50 nav-glass py-2.5 h-16 flex items-center justify-center px-6 shadow-sm">
+      <header className="fixed inset-x-0 top-0 z-50 nav-glass py-2.5 h-20 flex items-center justify-center px-6 shadow-sm">
         {/* Center Floating Capsule / Dynamic Island */}
-        <nav className="relative h-12 flex items-center overflow-visible rounded-full border border-slate-deep/10 bg-white/50 shadow-sm dark:border-white/10 dark:bg-white/5 px-2.5 z-10 gap-2">
+        <motion.nav
+          layout
+          className="relative h-14 flex items-center overflow-visible rounded-full border border-slate-deep/10 bg-white/50 shadow-sm dark:border-white/10 dark:bg-white/5 px-3 z-10 gap-2.5"
+          transition={{ type: "spring", stiffness: 380, damping: 30 }}
+        >
           {/* Logo */}
-          <a
+          <motion.a
+            layout
             href="#"
             onClick={(e) => {
               e.preventDefault();
               window.location.hash = "";
             }}
-            className="group flex items-center gap-1.5 pl-3.5 pr-2.5 py-1 text-slate-deep dark:text-white transition-colors cursor-pointer select-none"
+            className="group flex items-center gap-2 pl-4 pr-3 py-1.5 text-slate-deep dark:text-white cursor-pointer select-none"
           >
-            <div className="h-6 w-6 flex items-center justify-center">
+            <div className="h-8 w-8 flex items-center justify-center">
               <Player
                 autoplay
                 loop
                 src="/assets/Mascot.json"
-                style={{ height: "24px", width: "24px" }}
+                style={{ height: "32px", width: "32px" }}
               />
             </div>
-            <span className="font-display text-sm font-bold tracking-tight">
+            <span className="font-display text-base font-bold tracking-tight">
               Morphysics
             </span>
-          </a>
+          </motion.a>
 
           {/* Separator */}
-          <div className="h-5 w-[1px] bg-slate-deep/10 dark:bg-white/10" />
+          <motion.div layout className="h-7 w-[1px] bg-slate-deep/10 dark:bg-white/10" />
 
           {/* Navigation Tabs */}
-          <ul className="flex items-center gap-1.5">
+          <motion.ul layout className="flex items-center gap-2">
             {/* Tab: Interactive Lab */}
-            <li className="relative">
-              <button
+            <motion.li layout>
+              <motion.button
+                layout
                 type="button"
                 onClick={() => setActiveTab("lab")}
                 onMouseEnter={() => setHoveredTab("lab")}
                 onMouseLeave={() => setHoveredTab(null)}
                 className={cn(
-                  "relative flex size-9 items-center justify-center rounded-full transition-all duration-300 cursor-pointer",
+                  "relative flex h-11 min-w-[44px] items-center justify-center rounded-full cursor-pointer border border-transparent transition-colors duration-200 px-3",
                   activeTab === "lab"
                     ? "bg-gold text-slate-deep shadow-md font-bold"
-                    : "text-slate-gray hover:text-slate-deep dark:text-white/60 dark:hover:text-white"
+                    : "text-slate-gray hover:text-slate-deep dark:text-white/60 dark:hover:text-white hover:bg-white/20 dark:hover:bg-white/10 hover:border-slate-deep/5 dark:hover:border-white/10"
                 )}
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
               >
-                <Atom className="size-5" />
-              </button>
-
-              <AnimatePresence>
-                {hoveredTab === "lab" && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute top-12 left-1/2 -translate-x-1/2 px-2.5 py-1.5 rounded-lg bg-slate-deep dark:bg-white text-white dark:text-slate-deep text-xs font-bold whitespace-nowrap shadow-md pointer-events-none"
-                  >
-                    Interactive Lab
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </li>
+                <div className="flex items-center gap-2">
+                  <AnimatePresence initial={false}>
+                    {hoveredTab === "lab" && (
+                      <motion.span
+                        initial={{ width: 0, opacity: 0 }}
+                        animate={{ width: "auto", opacity: 1 }}
+                        exit={{ width: 0, opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="overflow-hidden whitespace-nowrap text-sm font-black font-sans uppercase tracking-wide pl-1"
+                      >
+                        Interactive Lab
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                  <Atom className="size-5.5 shrink-0" />
+                </div>
+              </motion.button>
+            </motion.li>
 
             {/* Tab: Settings */}
-            <li className="relative">
-              <button
+            <motion.li layout>
+              <motion.button
+                layout
                 type="button"
                 onClick={() => setActiveTab("settings")}
                 onMouseEnter={() => setHoveredTab("settings")}
                 onMouseLeave={() => setHoveredTab(null)}
                 className={cn(
-                  "relative flex size-9 items-center justify-center rounded-full transition-all duration-300 cursor-pointer",
+                  "relative flex h-11 min-w-[44px] items-center justify-center rounded-full cursor-pointer border border-transparent transition-colors duration-200 px-3",
                   activeTab === "settings"
                     ? "bg-gold text-slate-deep shadow-md font-bold"
-                    : "text-slate-gray hover:text-slate-deep dark:text-white/60 dark:hover:text-white"
+                    : "text-slate-gray hover:text-slate-deep dark:text-white/60 dark:hover:text-white hover:bg-white/20 dark:hover:bg-white/10 hover:border-slate-deep/5 dark:hover:border-white/10"
                 )}
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
               >
-                <Settings className="size-5" />
-              </button>
-
-              <AnimatePresence>
-                {hoveredTab === "settings" && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute top-12 left-1/2 -translate-x-1/2 px-2.5 py-1.5 rounded-lg bg-slate-deep dark:bg-white text-white dark:text-slate-deep text-xs font-bold whitespace-nowrap shadow-md pointer-events-none"
-                  >
-                    Settings
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </li>
-          </ul>
+                <div className="flex items-center gap-2">
+                  <Settings className="size-5.5 shrink-0" />
+                  <AnimatePresence initial={false}>
+                    {hoveredTab === "settings" && (
+                      <motion.span
+                        initial={{ width: 0, opacity: 0 }}
+                        animate={{ width: "auto", opacity: 1 }}
+                        exit={{ width: 0, opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="overflow-hidden whitespace-nowrap text-sm font-black font-sans uppercase tracking-wide pr-1"
+                      >
+                        Settings
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.button>
+            </motion.li>
+          </motion.ul>
 
           {/* Separator */}
-          <div className="h-5 w-[1px] bg-slate-deep/10 dark:bg-white/10" />
+          <motion.div layout className="h-7 w-[1px] bg-slate-deep/10 dark:bg-white/10" />
 
           {/* Right Side ThemeToggle */}
-          <div className="pr-1.5 flex items-center justify-center">
-            <ThemeToggle className="size-8 p-1 hover:bg-slate-deep/5 dark:hover:bg-white/5 rounded-full shadow-none border-none bg-transparent cursor-pointer" />
-          </div>
-        </nav>
+          <motion.div layout className="pr-2 flex items-center justify-center">
+            <ThemeToggle className="size-11 p-2 hover:bg-white/20 dark:hover:bg-white/10 hover:border-slate-deep/5 dark:hover:border-white/10 border border-transparent rounded-full shadow-none bg-transparent cursor-pointer transition-colors duration-200" />
+          </motion.div>
+        </motion.nav>
       </header>
 
-      {/* Main Container below navbar — sits below the fixed 64px header */}
-      <div className="absolute inset-0 top-16 z-10 overflow-hidden">
+      {/* Main Container below navbar — sits below the fixed 80px header */}
+      <div className="absolute inset-0 top-20 z-10 overflow-hidden">
         {activeTab === "lab" ? (
           // PAGE: INTERACTIVE LAB (Split view fitting screen height)
           <div className="h-full w-full flex flex-col lg:flex-row overflow-hidden">
