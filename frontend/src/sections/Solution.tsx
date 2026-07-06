@@ -356,7 +356,11 @@ export function Solution() {
                     {/* ═══ FRONT FACE ═══ */}
                     <div
                       className="relative w-full"
-                      style={{ backfaceVisibility: "hidden" }}
+                      style={{
+                        backfaceVisibility: "hidden",
+                        WebkitBackfaceVisibility: "hidden",
+                        transform: "translateZ(1px)",
+                      }}
                     >
                       <div
                         className={`card-surface overflow-hidden rounded-3xl p-6 border shadow-sm relative group flex flex-col justify-start transition-all duration-500 ease-out
@@ -389,11 +393,12 @@ export function Solution() {
                       className="absolute inset-0 w-full"
                       style={{
                         backfaceVisibility: "hidden",
-                        transform: "rotateY(180deg)",
+                        WebkitBackfaceVisibility: "hidden",
+                        transform: "rotateY(180deg) translateZ(1px)",
                       }}
                     >
                       <div
-                        className="h-full overflow-hidden rounded-3xl p-7 border border-gold/30 bg-slate-ink/95 dark:bg-[#161829]/95 backdrop-blur-md shadow-[0_25px_50px_-12px_rgba(206,169,69,0.3)] flex flex-col justify-center"
+                        className="h-full overflow-hidden rounded-3xl p-7 border border-gold/30 bg-slate-ink dark:bg-[#161829] shadow-[0_25px_50px_-12px_rgba(206,169,69,0.3)] flex flex-col justify-center"
                       >
                         {/* Bullet points with icons */}
                         <ul className="space-y-5">

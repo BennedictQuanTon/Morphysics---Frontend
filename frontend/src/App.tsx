@@ -20,8 +20,8 @@ export default function App() {
         <ProductOverview />
         <Problem />
         <Solution />
-        <Pricing />
         <Testimonials />
+        <Pricing />
         <Contact />
       </main>
       <Footer />
