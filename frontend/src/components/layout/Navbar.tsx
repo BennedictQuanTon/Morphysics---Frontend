@@ -55,10 +55,11 @@ export function Navbar() {
     setActiveIndex(idx);
     setDrawerOpen(false);
 
-    if (href === "#about") {
-      window.location.hash = "#about";
+    if (href === "#about" || href === "#faq") {
+      window.location.hash = href;
     } else {
-      if (window.location.hash === "#about") {
+      const isSubpage = window.location.hash === "#about" || window.location.hash === "#faq";
+      if (isSubpage) {
         window.location.hash = href;
         setTimeout(() => {
           const target = document.querySelector(href);
@@ -152,14 +153,11 @@ export function Navbar() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           {/* Logo */}
           <a
-            href="#hero"
+            href="#"
             onClick={(e) => {
               e.preventDefault();
-              if (window.location.hash === "#about") {
-                window.location.hash = "";
-              } else {
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }
+              window.location.hash = "";
+              window.scrollTo({ top: 0, behavior: "smooth" });
             }}
             className="group flex items-center gap-1"
           >

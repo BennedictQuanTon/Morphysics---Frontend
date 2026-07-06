@@ -12,6 +12,8 @@ import { Pricing } from "@/sections/Pricing";
 import { Testimonials } from "@/sections/Testimonials";
 import { Contact } from "@/sections/Contact";
 import { About } from "@/sections/About";
+import { FAQ } from "@/sections/FAQ";
+import { Assets } from "@/sections/Assets";
 
 export default function App() {
   const [currentHash, setCurrentHash] = useState(window.location.hash);
@@ -27,6 +29,8 @@ export default function App() {
   }, []);
 
   const isAboutPage = currentHash === "#about";
+  const isFaqPage = currentHash === "#faq";
+  const isAssetsPage = currentHash === "#assets";
 
   return (
     <ThemeProvider>
@@ -34,6 +38,10 @@ export default function App() {
       <main>
         {isAboutPage ? (
           <About />
+        ) : isFaqPage ? (
+          <FAQ />
+        ) : isAssetsPage ? (
+          <Assets />
         ) : (
           <>
             <Hero />

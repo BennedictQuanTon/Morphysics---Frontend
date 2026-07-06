@@ -52,11 +52,13 @@ export function Footer() {
                       href={
                         link === "About Us"
                           ? "#about"
-                          : link === "Pricing"
-                            ? "#pricing"
-                            : link === "Contact"
-                              ? "#contact"
-                              : "#"
+                          : link === "FAQ"
+                            ? "#faq"
+                            : link === "Pricing"
+                              ? "#pricing"
+                              : link === "Contact"
+                                ? "#contact"
+                                : "#"
                       }
                       className="text-sm text-white/60 transition-colors hover:text-gold"
                     >
