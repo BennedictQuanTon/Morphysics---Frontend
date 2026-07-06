@@ -106,9 +106,8 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-14 flex flex-col items-center justify-between gap-3 border-t border-white/10 pt-7 text-sm text-white/50 sm:flex-row">
+        <div className="mt-14 border-t border-white/10 pt-7 text-center text-sm text-white/50">
           <span>© 2026 Morphysics. All rights reserved.</span>
-          <span>Made with ❤️ in Ho Chi Minh City, Vietnam.</span>
         </div>
       </div>
     </footer>

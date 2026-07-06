@@ -105,7 +105,7 @@ export function SolenoidTransition() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(165,200,255,0.05)_0%,transparent_75%)] pointer-events-none" />
 
       {/* Physics Solenoid Vector Layer */}
-      <div className="w-full h-full relative z-10">
+      <div className="w-full h-full max-w-6xl mx-auto px-8 relative z-10">
         <svg
           viewBox="-50 0 1300 200"
           className="w-full h-full overflow-visible"

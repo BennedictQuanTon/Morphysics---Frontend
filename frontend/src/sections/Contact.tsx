@@ -48,7 +48,7 @@ export function Contact() {
         : "border-[color:var(--border)]",
     );
   return (
-    <section id="contact" className="relative overflow-hidden bg-cloud dark:bg-slate-ink py-24 sm:py-28 transition-colors duration-500 text-slate-deep dark:text-white">
+    <section id="contact" className="relative overflow-hidden bg-cloud dark:bg-slate-ink pt-10 pb-20 sm:pt-12 sm:pb-24 transition-colors duration-500 text-slate-deep dark:text-white">
       {/* Aurora background */}
       <div className="aurora-blob right-[-10%] top-[-5%] h-[400px] w-[400px] bg-gold/15 dark:bg-gold/8" />
       <div className="aurora-blob left-[-10%] bottom-[-5%] h-[400px] w-[400px] bg-indigo-500/10 dark:bg-indigo-500/8" />
@@ -66,22 +66,34 @@ export function Contact() {
       <div className="mx-auto grid max-w-7xl gap-14 px-6 sm:px-8 lg:grid-cols-2 lg:gap-20 lg:px-12 relative z-10">
         {/* Left: info */}
         <Reveal>
-          <span className="text-gold text-sm sm:text-base font-extrabold uppercase tracking-[0.22em] mb-3 block">
-            Get In Touch
-          </span>
-          <h2 className="text-4xl sm:text-5xl tracking-tight !leading-[1.2]">
-            <span className="font-sans font-extrabold text-slate-deep dark:text-white">
-              Let's Talk{" "}
-            </span>
-            <span className="font-display italic font-semibold text-gold">
-              Physics.
-            </span>
-          </h2>
+          <div className="flex items-center justify-between gap-6 flex-wrap sm:flex-nowrap">
+            <div className="flex-1">
+              <span className="text-gold text-sm sm:text-base font-extrabold uppercase tracking-[0.22em] mb-3 block">
+                Get In Touch
+              </span>
+              <h2 className="text-4xl sm:text-5xl tracking-tight !leading-[1.2]">
+                <span className="font-sans font-extrabold text-slate-deep dark:text-white">
+                  Let's Talk{" "}
+                </span>
+                <span className="font-display italic font-semibold text-gold">
+                  Physics.
+                </span>
+              </h2>
+            </div>
+            <div className="h-24 w-24 sm:h-28 sm:w-28 shrink-0">
+              <Player
+                autoplay
+                loop
+                src="/assets/Mascot.json"
+                style={{ height: "100%", width: "100%" }}
+              />
+            </div>
+          </div>
 
           {/* Thin horizontal line separator */}
           <div className="border-t border-slate-deep/10 dark:border-white/10 mt-6 mb-8 w-full" />
 
-          <p className="text-muted mt-5 max-w-md leading-relaxed">
+          <p className="text-slate-gray dark:text-white/85 text-lg leading-relaxed font-sans mt-5 max-w-md">
             Have questions about a plan, want to schedule a demo for your
             school, or just curious? We're happy to hear from you.
           </p>
@@ -129,14 +141,7 @@ export function Contact() {
             </div>
           </div>
 
-          <div className="mt-8 h-32 w-32">
-            <Player
-              autoplay
-              loop
-              src="/assets/Mascot.json"
-              style={{ height: "100%", width: "100%" }}
-            />
-          </div>
+
         </Reveal>
 
         {/* Right: form */}

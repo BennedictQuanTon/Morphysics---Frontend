@@ -46,7 +46,7 @@ function getFeatureIcon(feature: string) {
 
 export function Pricing() {
   return (
-    <section id="pricing" className="relative overflow-hidden bg-cloud dark:bg-slate-ink py-24 sm:py-28 transition-colors duration-500 text-slate-deep dark:text-white">
+    <section id="pricing" className="relative overflow-hidden bg-cloud dark:bg-slate-ink pt-10 pb-10 sm:pt-12 sm:pb-12 transition-colors duration-500 text-slate-deep dark:text-white">
       {/* Aurora background */}
       <div className="aurora-blob right-[-10%] top-[-5%] h-[400px] w-[400px] bg-gold/15 dark:bg-gold/8" />
       <div className="aurora-blob left-[-10%] bottom-[-5%] h-[400px] w-[400px] bg-indigo-500/10 dark:bg-indigo-500/8" />
@@ -168,15 +168,6 @@ export function Pricing() {
           })}
         </div>
 
-        <Reveal className="mt-14 text-center" delay={0.2}>
-          <p className="text-muted text-xs">
-            All prices in VND. School package billed per semester. No hidden
-            fees. ·{" "}
-            <a href="#" className="font-bold text-gold-hover hover:underline dark:text-gold">
-              Questions about pricing? See full FAQ →
-            </a>
-          </p>
-        </Reveal>
       </div>
     </section>
   );
