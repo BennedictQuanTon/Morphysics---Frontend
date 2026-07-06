@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import NumberFlow from "@number-flow/react";
 import { stats } from "@/data/content";
@@ -16,15 +16,37 @@ function StatItem({
   index: number;
 }) {
   const [value, setValue] = useState(0);
+  const [fontsReady, setFontsReady] = useState(false);
+  const isIntersectingRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof document !== "undefined" && document.fonts) {
+      document.fonts.ready.then(() => {
+        setFontsReady(true);
+      });
+    } else {
+      setFontsReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (fontsReady && isIntersectingRef.current && stat.value !== undefined) {
+      setValue(stat.value);
+    }
+  }, [fontsReady, stat.value]);
 
   return (
     <motion.div
       onViewportEnter={() => {
-        if (stat.value !== undefined) {
+        isIntersectingRef.current = true;
+        if (fontsReady && stat.value !== undefined) {
           setValue(stat.value);
         }
       }}
-      onViewportLeave={() => setValue(0)}
+      onViewportLeave={() => {
+        isIntersectingRef.current = false;
+        setValue(0);
+      }}
       viewport={{ margin: "-60px" }}
       className="flex flex-col items-center gap-2 text-center"
     >
@@ -33,16 +55,19 @@ function StatItem({
           {stat.customText ? (
             <span>{stat.customText}</span>
           ) : (
-            <NumberFlow
-              value={value}
-              prefix={stat.prefix || ""}
-              suffix={stat.suffix || ""}
-              format={{
-                minimumFractionDigits: stat.decimals || 0,
-                maximumFractionDigits: stat.decimals || 0,
-              }}
-              transformTiming={{ duration: 1200, easing: "ease-out" }}
-            />
+            <span className="inline-block tracking-normal flex-shrink-0" style={{ letterSpacing: "normal" }}>
+              <NumberFlow
+                key={fontsReady ? "ready" : "loading"}
+                value={value}
+                prefix={stat.prefix || ""}
+                suffix={stat.suffix || ""}
+                format={{
+                  minimumFractionDigits: stat.decimals || 0,
+                  maximumFractionDigits: stat.decimals || 0,
+                }}
+                transformTiming={{ duration: 1200, easing: "ease-out" }}
+              />
+            </span>
           )}
         </div>
         <p className="text-muted mx-auto mt-2 max-w-[220px] text-sm leading-snug">

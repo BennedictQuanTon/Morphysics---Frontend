@@ -160,6 +160,11 @@ export const Physics3DModel = ({
     };
 
     const draw = () => {
+      // Safety check for Safari flex container late rendering
+      if (canvas.width === 0 || canvas.height === 0) {
+        resizeCanvas();
+      }
+
       const w = canvas.width;
       const h = canvas.height;
 
@@ -318,15 +323,15 @@ export const Physics3DModel = ({
   };
 
   return (
-    <div className="w-full h-full p-0 overflow-hidden relative bg-transparent border-0 shadow-none">
-      <div className="w-full h-full relative">
+    <div className="absolute inset-0 w-full h-full p-0 overflow-hidden bg-transparent border-0 shadow-none">
+      <div className="absolute inset-0 w-full h-full">
         <canvas
           ref={canvasRef}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUpOrLeave}
           onMouseLeave={handleMouseUpOrLeave}
-          className="w-full h-full bg-transparent cursor-grab active:cursor-grabbing block"
+          className="absolute inset-0 w-full h-full bg-transparent cursor-grab active:cursor-grabbing block"
         />
       </div>
     </div>

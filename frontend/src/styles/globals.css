@@ -117,21 +117,44 @@ body {
 
 /* ---------- FlipText 3D characters ---------- */
 .flip-char {
-  animation: flip-char-anim var(--flip-duration, 2.2s) var(--expo-out)
-    var(--flip-delay, 0s) var(--flip-iteration, infinite) both;
+  animation-name: flip-char-anim;
+  animation-timing-function: var(--expo-out);
+  animation-fill-mode: both;
+
+  -webkit-animation-name: flip-char-anim;
+  -webkit-animation-timing-function: var(--expo-out);
+  -webkit-animation-fill-mode: both;
+
+  -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
+
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
 }
-@keyframes flip-char-anim {
+
+@-webkit-keyframes flip-char-anim {
   0% {
+    -webkit-transform: rotateX(-90deg);
     transform: rotateX(-90deg);
     opacity: 0;
   }
   18%,
-  80% {
+  100% {
+    -webkit-transform: rotateX(0deg);
     transform: rotateX(0deg);
     opacity: 1;
   }
+}
+
+@keyframes flip-char-anim {
+  0% {
+    -webkit-transform: rotateX(-90deg);
+    transform: rotateX(-90deg);
+    opacity: 0;
+  }
+  18%,
   100% {
+    -webkit-transform: rotateX(0deg);
     transform: rotateX(0deg);
     opacity: 1;
   }

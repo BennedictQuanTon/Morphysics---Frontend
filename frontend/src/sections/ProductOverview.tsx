@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { BrainCircuit, Orbit, SlidersHorizontal } from "lucide-react";
 import { Reveal } from "@/components/ui/Reveal";
@@ -63,15 +63,37 @@ function StatItem({
   index: number;
 }) {
   const [value, setValue] = useState(0);
+  const [fontsReady, setFontsReady] = useState(false);
+  const isIntersectingRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof document !== "undefined" && document.fonts) {
+      document.fonts.ready.then(() => {
+        setFontsReady(true);
+      });
+    } else {
+      setFontsReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (fontsReady && isIntersectingRef.current && stat.value !== undefined) {
+      setValue(stat.value);
+    }
+  }, [fontsReady, stat.value]);
 
   return (
     <motion.div
       onViewportEnter={() => {
-        if (stat.value !== undefined) {
+        isIntersectingRef.current = true;
+        if (fontsReady && stat.value !== undefined) {
           setValue(stat.value);
         }
       }}
-      onViewportLeave={() => setValue(0)}
+      onViewportLeave={() => {
+        isIntersectingRef.current = false;
+        setValue(0);
+      }}
       viewport={{ margin: "-60px" }}
       className="flex flex-col items-center text-center h-full"
     >
@@ -81,16 +103,19 @@ function StatItem({
           {stat.customText ? (
             <span className="relative -top-[4px]">{stat.customText}</span>
           ) : (
-            <NumberFlow
-              value={value}
-              prefix={stat.prefix || ""}
-              suffix={stat.suffix || ""}
-              format={{
-                minimumFractionDigits: stat.decimals || 0,
-                maximumFractionDigits: stat.decimals || 0,
-              }}
-              transformTiming={{ duration: 1200, easing: "ease-out" }}
-            />
+            <span className="inline-block tracking-normal flex-shrink-0" style={{ letterSpacing: "normal" }}>
+              <NumberFlow
+                key={fontsReady ? "ready" : "loading"}
+                value={value}
+                prefix={stat.prefix || ""}
+                suffix={stat.suffix || ""}
+                format={{
+                  minimumFractionDigits: stat.decimals || 0,
+                  maximumFractionDigits: stat.decimals || 0,
+                }}
+                transformTiming={{ duration: 1200, easing: "ease-out" }}
+              />
+            </span>
           )}
         </div>
 
