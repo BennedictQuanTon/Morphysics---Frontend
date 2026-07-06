@@ -14,6 +14,9 @@ import { Contact } from "@/sections/Contact";
 import { About } from "@/sections/About";
 import { FAQ } from "@/sections/FAQ";
 import { Assets } from "@/sections/Assets";
+import { Login } from "@/sections/Login";
+import { Signup } from "@/sections/Signup";
+import { Dashboard } from "@/sections/Dashboard";
 
 export default function App() {
   const [currentHash, setCurrentHash] = useState(window.location.hash);
@@ -31,17 +34,27 @@ export default function App() {
   const isAboutPage = currentHash === "#about";
   const isFaqPage = currentHash === "#faq";
   const isAssetsPage = currentHash === "#assets";
+  const isLoginPage = currentHash === "#login";
+  const isSignupPage = currentHash === "#signup";
+  const isDashboardPage = currentHash.startsWith("#dashboard");
+  const isAuthPage = isLoginPage || isSignupPage;
 
   return (
     <ThemeProvider>
-      <Navbar />
+      {!isAuthPage && !isDashboardPage && <Navbar />}
       <main>
-        {isAboutPage ? (
+        {isLoginPage ? (
+          <Login />
+        ) : isSignupPage ? (
+          <Signup />
+        ) : isAboutPage ? (
           <About />
         ) : isFaqPage ? (
           <FAQ />
         ) : isAssetsPage ? (
           <Assets />
+        ) : isDashboardPage ? (
+          <Dashboard currentHash={currentHash} />
         ) : (
           <>
             <Hero />
@@ -56,7 +69,7 @@ export default function App() {
           </>
         )}
       </main>
-      <Footer />
+      {!isAuthPage && !isDashboardPage && <Footer />}
     </ThemeProvider>
   );
 }

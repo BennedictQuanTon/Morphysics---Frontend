@@ -227,18 +227,18 @@ export function Navbar() {
           {/* Right actions */}
           <div className="flex items-center gap-3">
             <ThemeToggle className="size-9 p-1" />
-            <button
-              className="hidden rounded-xl border border-slate-deep/20 px-5 py-2 text-sm font-semibold transition-colors hover:border-gold hover:text-gold-hover dark:border-white/20 dark:hover:border-gold dark:hover:text-gold sm:block"
-              type="button"
+            <a
+              href="#login"
+              className="hidden rounded-xl border border-slate-deep/20 px-5 py-2 text-sm font-semibold transition-colors hover:border-gold hover:text-gold-hover dark:border-white/20 dark:hover:border-gold dark:hover:text-gold sm:block text-center"
             >
               Login
-            </button>
-            <button
-              className="hidden rounded-xl bg-gold px-5 py-2 text-sm font-bold text-slate-deep shadow-lg shadow-gold/30 transition-all hover:bg-gold-hover hover:shadow-gold/50 active:scale-95 sm:block"
-              type="button"
+            </a>
+            <a
+              href="#signup"
+              className="hidden rounded-xl bg-gold px-5 py-2 text-sm font-bold text-slate-deep shadow-lg shadow-gold/30 transition-all hover:bg-gold-hover hover:shadow-gold/50 active:scale-95 sm:block text-center"
             >
               Sign Up
-            </button>
+            </a>
             <button
               className="rounded-lg p-2 lg:hidden"
               onClick={() => setDrawerOpen(true)}
@@ -295,18 +295,20 @@ export function Navbar() {
                 </a>
               ))}
               <div className="mt-auto flex flex-col gap-3">
-                <button
-                  className="w-full rounded-xl border border-slate-deep/20 py-3 font-semibold dark:border-white/20"
-                  type="button"
+                <a
+                  href="#login"
+                  onClick={() => setDrawerOpen(false)}
+                  className="w-full rounded-xl border border-slate-deep/20 py-3 font-semibold dark:border-white/20 text-center block"
                 >
                   Login
-                </button>
-                <button
-                  className="w-full rounded-xl bg-gold py-3 font-bold text-slate-deep"
-                  type="button"
+                </a>
+                <a
+                  href="#signup"
+                  onClick={() => setDrawerOpen(false)}
+                  className="w-full rounded-xl bg-gold py-3 font-bold text-slate-deep text-center block"
                 >
                   Sign Up
-                </button>
+                </a>
               </div>
             </motion.aside>
           </>
