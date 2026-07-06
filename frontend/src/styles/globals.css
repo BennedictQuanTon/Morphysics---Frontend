@@ -12,9 +12,9 @@
   --text-muted: #454c70;
   --card: #ffffff;
   --border: rgba(35, 39, 61, 0.1);
-  --gold: #CEA945;
+  --gold: #cea945;
   --gold-hover: #b89336;
-  --gold-grad-1: #CEA945;
+  --gold-grad-1: #cea945;
   --gold-grad-2: #e0be5f;
 
   color-scheme: light;
@@ -44,7 +44,9 @@ body {
   background-color: var(--bg);
   color: var(--text);
   overflow-x: hidden;
-  transition: background-color 0.4s ease, color 0.4s ease;
+  transition:
+    background-color 0.4s ease,
+    color 0.4s ease;
 }
 
 ::selection {
@@ -94,7 +96,12 @@ body {
 
 /* ---------- Gold gradient text ---------- */
 .gold-gradient-text {
-  background: linear-gradient(120deg, var(--gold-grad-1) 20%, var(--gold-grad-2) 50%, var(--gold-grad-1) 80%);
+  background: linear-gradient(
+    120deg,
+    var(--gold-grad-1) 20%,
+    var(--gold-grad-2) 50%,
+    var(--gold-grad-1) 80%
+  );
   background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;

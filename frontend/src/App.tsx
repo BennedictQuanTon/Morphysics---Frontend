@@ -4,7 +4,8 @@ import { Footer } from "@/components/layout/Footer";
 import { Hero } from "@/sections/Hero";
 import { Partners } from "@/sections/Partners";
 import { ProductOverview } from "@/sections/ProductOverview";
-import { Personas } from "@/sections/Personas";
+import { Problem } from "@/sections/Problem";
+import { Solution } from "@/sections/Solution";
 import { Pricing } from "@/sections/Pricing";
 import { Testimonials } from "@/sections/Testimonials";
 import { Contact } from "@/sections/Contact";
@@ -17,7 +18,8 @@ export default function App() {
         <Hero />
         <Partners />
         <ProductOverview />
-        <Personas />
+        <Problem />
+        <Solution />
         <Pricing />
         <Testimonials />
         <Contact />

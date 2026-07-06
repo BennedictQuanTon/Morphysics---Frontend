@@ -25,46 +25,60 @@ export const featureCards = [
   },
 ];
 
-export const personas = [
+export const problems = [
   {
-    badge: "For Students · Age 12–18",
-    headline: "Stop Memorizing. Start Understanding.",
-    problem:
-      "Physics is filled with invisible forces, abstract vectors, and formulas that don't connect to reality. You copy diagrams from a board and hope it makes sense later.",
-    solution:
-      "With Morphysics, input your exact homework problem — and watch the scenario come alive. Interact with the objects. Change a variable. See what actually happens.",
-    stat: "Millions of Vietnamese students face heavy exam pressure built entirely around memorization, not comprehension.",
-    cta: "Try as a Student",
+    title: "Formula Memorization",
+    number: 11,
+    suffix: "M+",
+    accent: "from-red-500 to-orange-500",
     image: "/assets/pics-study-groups.jpeg",
-    imageAlt: "Students studying together in a group",
-    imageSide: "right" as const,
   },
   {
-    badge: "For Teachers",
-    headline: "A Full Lab, Ready in Seconds.",
-    problem:
-      "Setting up physical lab equipment for 40–50 students inside a single 45-minute class period is a logistical nightmare. Most teachers skip the experiment.",
-    solution:
-      "Deploy a fully customized simulation for your entire class instantly. No equipment. No setup. No teardown. Just a visual, interactive learning moment that sticks.",
-    stat: "The zero-setup model recovers the time lost to preparation, maximizing every minute of instructional time.",
-    cta: "Try as a Teacher",
+    title: "Logistical Nightmare",
+    number: 45,
+    suffix: "Min",
+    accent: "from-orange-500 to-amber-500",
     image: "/assets/pics-physics-class.jpg",
-    imageAlt: "A physics classroom during a lesson",
-    imageSide: "left" as const,
   },
   {
+    title: "Resource Constraints",
+    number: 666,
+    suffix: "+",
+    accent: "from-rose-500 to-red-600",
+    image: "/assets/pics-physics-lab.jpg",
+  },
+];
+
+export const solutions = [
+  {
+    tab: "Students",
+    badge: "For Students · Age 12–18",
+    headline: "Understand the Essence. Stop Memorizing.",
+    solution: "Input your exact homework problem — and watch the scenario come alive. Interact with objects, modify forces, gravity, or friction in real time to see what actually happens.",
+    cta: "Try for Free",
+    image: "/assets/pics-study-groups.jpeg",
+    imageAlt: "Students studying physics together in a group",
+    stat: "Build deep visual intuition and improve academic outcomes.",
+  },
+  {
+    tab: "Teachers",
+    badge: "For Educators & Teachers",
+    headline: "A Complete Lab, Ready in 5 Seconds.",
+    solution: "Deploy customized visual simulations for your entire class instantly on any projector. No equipment, no setup, no teardown — just raw, high-impact instructional time.",
+    cta: "Explore Teacher Plan",
+    image: "/assets/pics-physics-class.jpg",
+    imageAlt: "A physics classroom with interactive learning",
+    stat: "Recover instructional hours lost to physical lab preparation.",
+  },
+  {
+    tab: "Institutions",
     badge: "For Schools & Institutions",
-    headline: "Scale Learning Without the Cost.",
-    problem:
-      "Physical lab infrastructure degrades, requires expensive upkeep, and can't scale to every student. Underfunded schools simply go without.",
-    solution:
-      "An institutional license brings a complete virtual physics lab to every student in the school — at 10,000–13,000 VND per student per year. Less than a coffee.",
-    stat: "666+ secondary and high schools in HCMC alone. Each one is a potential lab upgrade with zero hardware.",
-    cta: "Contact for Institutional Pricing",
-    image: "/assets/pics-physics-class.jpg",
-    imageAlt: "Wide view of a school classroom",
-    imageSide: "right" as const,
-    wideCrop: true,
+    headline: "Scale Visual Labs with Zero Upkeep.",
+    solution: "Bring an interactive virtual physics lab to every student in your school at 10,000–13,000 VND per year. Zero maintenance, infinite scale, and absolute safety.",
+    cta: "Contact for Institutional License",
+    image: "/assets/pics-physics-lab-2.jpeg",
+    imageAlt: "School computer lab running virtual simulations",
+    stat: "Save 90% of structural budget compared to physical labs.",
   },
 ];
 

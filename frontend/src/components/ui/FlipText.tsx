@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 
 interface FlipTextProps {
@@ -6,21 +6,29 @@ interface FlipTextProps {
   children: string;
   duration?: number;
   delay?: number;
-  loop?: boolean;
 }
 
 /**
- * 3D character flip-in text (user-provided effect; CSS lives in globals.css).
+ * 3D character flip-in text using native CSS transitions for optimal performance on all browsers (including Safari).
  */
 export function FlipText({
   className,
   children,
   duration = 2.6,
   delay = 0,
-  loop = false,
 }: FlipTextProps) {
   const words = useMemo(() => children.split(" "), [children]);
   const totalChars = children.length;
+
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    // Trigger transition shortly after mount to ensure the DOM is painted
+    const timer = setTimeout(() => {
+      setIsReady(true);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, []);
 
   const getCharIndex = (wordIndex: number, charIndex: number) => {
     let index = 0;
@@ -45,22 +53,33 @@ export function FlipText({
             const sine = Math.sin(normalized * (Math.PI / 2));
             const calculatedDelay = sine * (duration * 0.25) + delay;
 
+            const activeDuration = duration * 0.18;
+
             return (
               <span
                 key={charIndex}
-                className="flip-char relative inline-block"
+                className="relative inline-block origin-center"
                 style={{
-                  opacity: 0,
-                  transform: "rotateX(-90deg)",
-                  WebkitTransform: "rotateX(-90deg)",
-                  animationDuration: `${duration}s`,
-                  animationDelay: `${calculatedDelay}s`,
-                  animationIterationCount: loop ? "infinite" : "1",
-                  WebkitAnimationDuration: `${duration}s`,
-                  WebkitAnimationDelay: `${calculatedDelay}s`,
-                  WebkitAnimationIterationCount: loop ? "infinite" : "1",
+                  opacity: isReady ? 1 : 0,
+                  transform: isReady ? "rotateX(0deg)" : "rotateX(-90deg)",
+                  WebkitTransform: isReady ? "rotateX(0deg)" : "rotateX(-90deg)",
+                  
+                  // Native transition setup for smooth performance
+                  transitionProperty: "transform, opacity",
+                  transitionDuration: `${activeDuration}s`,
+                  transitionDelay: `${calculatedDelay}s`,
+                  transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+                  
+                  WebkitTransitionProperty: "-webkit-transform, opacity",
+                  WebkitTransitionDuration: `${activeDuration}s`,
+                  WebkitTransitionDelay: `${calculatedDelay}s`,
+                  WebkitTransitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+                  
                   transformStyle: "preserve-3d",
                   WebkitTransformStyle: "preserve-3d",
+                  backfaceVisibility: "hidden",
+                  WebkitBackfaceVisibility: "hidden",
+                  willChange: "transform, opacity",
                 }}
               >
                 {char}
