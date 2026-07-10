@@ -267,9 +267,8 @@ export function ProductOverview() {
               </motion.div>
             </motion.div>
 
-            {/* Button — center */}
             <Reveal delay={0.2} className="relative z-30 flex-shrink-0 mx-[-2rem]">
-              <RadialGlowButton>Start for Free</RadialGlowButton>
+              <RadialGlowButton onClick={() => window.location.hash = "#dashboard"}>Start for Free</RadialGlowButton>
             </Reveal>
 
             {/* Right pointing hand */}

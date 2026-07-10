@@ -75,7 +75,7 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 1.2, ease: [0.16, 1, 0.3, 1] }}
             className="mt-9 flex flex-wrap items-center gap-4"
           >
-            <RadialGlowButton>Try it Free</RadialGlowButton>
+            <RadialGlowButton onClick={() => window.location.hash = "#dashboard"}>Try it Free</RadialGlowButton>
             <AnimatedButton onClick={scrollToOverview}>
               <MousePointerClick className="h-4 w-4" />
               Watch the Demo
