@@ -234,10 +234,10 @@ export function Navbar() {
               Login
             </a>
             <a
-              href="#signup"
-              className="hidden rounded-xl bg-gold px-5 py-2 text-sm font-bold text-slate-deep shadow-lg shadow-gold/30 transition-all hover:bg-gold-hover hover:shadow-gold/50 active:scale-95 sm:block text-center"
+              href="#dashboard"
+              className="hidden rounded-xl bg-gold px-5 py-2 text-base font-display italic font-bold text-slate-deep shadow-lg shadow-gold/30 transition-all hover:bg-gold-hover hover:shadow-gold/50 active:scale-95 sm:block text-center"
             >
-              Sign Up
+              Try it
             </a>
             <button
               className="rounded-lg p-2 lg:hidden"
@@ -303,11 +303,11 @@ export function Navbar() {
                   Login
                 </a>
                 <a
-                  href="#signup"
+                  href="#dashboard"
                   onClick={() => setDrawerOpen(false)}
-                  className="w-full rounded-xl bg-gold py-3 font-bold text-slate-deep text-center block"
+                  className="w-full rounded-xl bg-gold py-3 font-display italic font-bold text-slate-deep text-center block"
                 >
-                  Sign Up
+                  Try it
                 </a>
               </div>
             </motion.aside>
