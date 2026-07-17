@@ -1,28 +1,27 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Player } from "@lottiefiles/react-lottie-player";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
-import { useTheme } from "@/hooks/useTheme";
+import { apiService } from "../services/labApi";
+import type { 
+  Nullable, 
+  PhysicsComponent, 
+  PhysicsStateItem, 
+  Phase1Response, 
+  Phase2Response, 
+  Snapshot, 
+  StateBinding, 
+  VisualElement, 
+  SceneInstance, 
+  ResolvedInstance 
+} from '../services/schema';
 import {
   Atom,
   Settings,
-  Trash2,
   Send,
   Image as ImageIcon,
-  Play,
-  Pause,
-  RotateCcw,
-  Sliders,
-  Bell,
-  Lock,
-  Info,
-  Check,
-  Sparkles,
-  User,
-  Sun,
-  Moon,
-  Camera
+  User
 } from "lucide-react";
 
 interface Message {
@@ -32,1985 +31,918 @@ interface Message {
   timestamp: Date;
 }
 
+type LoadingMode = 'idle' | 'phase1' | 'phase2';
+
+type VisualNode = Omit<VisualElement, 'type' | 'children'> & {
+  type: string;
+  width?: number;
+  height?: number;
+  opacity?: number;
+  fontSize?: number;
+  text?: string;
+  children?: VisualNode[];
+  offset?: string | number;
+  color?: string;
+  stopColor?: string;
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  fx?: string | number;
+  fy?: string | number;
+};
+
+const INITIAL_CANVAS_SIZE = [1300, 1500] as [number, number];
+
+// --- BỘ TÍNH TOÁN ĐỘNG LỰC HỌC VẬT LÝ HỆ THỐNG ---
+function evaluatePhysicsEquations(equations: string[], currentState: Record<string, number>): Record<string, number> {
+  const nextState = { ...currentState };
+  for (let iter = 0; iter < 3; iter++) {
+    equations.forEach((eq) => {
+      const parts = eq.split('=');
+      if (parts.length !== 2) return;
+      
+      const targetVar = parts[0].trim();
+      let expression = parts[1].trim();
+      
+      const sortedKeys = Object.keys(nextState).sort((a, b) => b.length - a.length);
+      sortedKeys.forEach((key) => {
+        const regex = new RegExp(`\\b${key}\\b`, 'g');
+        expression = expression.replace(regex, String(nextState[key]));
+      });
+      
+      try {
+        const sanitized = expression.replace(/[^-+*/().\d\s]/g, '');
+        const evaluated = Function(`"use strict"; return (${sanitized})`)();
+        if (Number.isFinite(evaluated)) {
+          nextState[targetVar] = evaluated;
+        }
+      } catch (err) {}
+    });
+  }
+  return nextState;
+}
+
+function formatError(err: unknown): string {
+  if (!err) return 'Lỗi không xác định';
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+function safeNumber(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function toCssValue(value?: string) {
+  if (!value) return undefined;
+  return value;
+}
+
+function normalizeVisualUnits(node: VisualNode, width: number, height: number) {
+  const scaleX = (v?: number) => safeNumber(v, 0) * width;
+  const scaleY = (v?: number) => safeNumber(v, 0) * height;
+
+  return {
+    x: scaleX(node.x),
+    y: scaleY(node.y),
+    x1: scaleX(node.x1),
+    y1: scaleY(node.y1),
+    x2: scaleX(node.x2),
+    y2: scaleY(node.y2),
+    w: scaleX(node.w ?? node.width),
+    h: scaleY(node.h ?? node.height),
+    rx: scaleX(node.rx),
+    ry: scaleY(node.ry),
+    cx: scaleX(node.cx),
+    cy: scaleY(node.cy),
+    r: safeNumber(node.r, 0) * Math.min(width, height),
+    strokeWidth: safeNumber(node.strokeWidth, 0) * Math.min(width, height),
+    fontSize: safeNumber(node.fontSize, 0.1) * Math.min(width, height),
+  };
+}
+
+function denormalizePath(path: string | undefined, width: number, height: number) {
+  if (!path) return '';
+  return path.replace(/-?\d*\.?\d+/g, (raw, offset, source) => {
+    const previous = source.slice(Math.max(0, offset - 2), offset).trim();
+    const number = Number(raw);
+    if (!Number.isFinite(number)) return raw;
+    const axis = previous.endsWith('L') || previous.endsWith('M') || previous.endsWith('Q') ? 'x' : 'unknown';
+    if (axis === 'x') return String(number * width);
+    return String(number <= 1 && number >= -1 ? number * height : number);
+  });
+}
+
+function evaluateBindingTransform(expression: string, stateValues: Record<string, number>) {
+  let result = expression;
+  Object.entries(stateValues).forEach(([key, value]) => {
+    result = result.split(`state.${key}`).join(String(value));
+  });
+
+  result = result.replace(/calc\(([^)]+)\)/g, (_, inner) => {
+    const sanitized = inner.replace(/[^-+*/().\d\s]/g, '');
+    try {
+      const evaluated = Function(`"use strict"; return (${sanitized})`)();
+      return Number.isFinite(evaluated) ? String(evaluated) : '0';
+    } catch {
+      return '0';
+    }
+  });
+
+  const translateMatch = result.match(/translate\(([^,]+),\s*([^)]+)\)/);
+  if (translateMatch) {
+    return `translate(${parseFloat(translateMatch[1]) || 0} ${parseFloat(translateMatch[2]) || 0})`;
+  }
+  const rotateMatch = result.match(/rotate\(([^)]+)\)/);
+  if (rotateMatch) {
+    return `rotate(${parseFloat(rotateMatch[1]) || 0})`;
+  }
+  return undefined;
+}
+
+function getComponentSize(component: PhysicsComponent) {
+  const base = component.base_size || [0, 0, 100, 100];
+  return { width: safeNumber(base[2], 100), height: safeNumber(base[3], 100) };
+}
+
+function resolveAnchor(component: PhysicsComponent, anchorId?: Nullable<string>) {
+  if (!anchorId) return { x: 0.5, y: 0.5 };
+  return component.anchor_points?.find((anchor) => anchor.id === anchorId) || { x: 0.5, y: 0.5 };
+}
+
+function resolveInstances(instances: SceneInstance[], components: PhysicsComponent[]) {
+  const byComponentId = new Map(components.map((component) => [component.id, component]));
+  const resolved = new Map<string, ResolvedInstance>();
+  const ordered = [...instances].sort((a, b) => safeNumber(a.z_index, 0) - safeNumber(b.z_index, 0));
+
+  ordered.forEach((instance, index) => {
+    const component = byComponentId.get(instance.component_id);
+    if (!component) return;
+
+    const { width, height } = getComponentSize(component);
+
+    if (instance.placement.type === 'absolute') {
+      resolved.set(instance.instance_id, {
+        ...instance,
+        x: safeNumber(instance.placement.point?.x, 160 + index * 24),
+        y: safeNumber(instance.placement.point?.y, 120 + index * 24),
+        width,
+        height,
+      });
+      return;
+    }
+
+    const parent = instance.placement.attach_to ? resolved.get(instance.placement.attach_to) : undefined;
+    const parentComponent = parent ? byComponentId.get(parent.component_id) : undefined;
+
+    if (!parent || !parentComponent) {
+      resolved.set(instance.instance_id, { ...instance, x: 160 + index * 32, y: 120 + index * 32, width, height });
+      return;
+    }
+
+    const myAnchor = resolveAnchor(component, instance.placement.my_anchor);
+    const targetAnchor = resolveAnchor(parentComponent, instance.placement.target_anchor);
+
+    const targetX = parent.x + targetAnchor.x * parent.width;
+    const targetY = parent.y + targetAnchor.y * parent.height;
+
+    resolved.set(instance.instance_id, {
+      ...instance,
+      x: targetX - myAnchor.x * width,
+      y: targetY - myAnchor.y * height,
+      width,
+      height,
+    });
+  });
+
+  return Array.from(resolved.values());
+}
+
+// --- VISUAL RENDER COMPONENT (ĐÃ SỬA ĐỔI TOÀN DIỆN THẺ SVG & ĐỆ QUY) ---
+function VisualRenderer({
+  visuals = [],
+  width,
+  height,
+  bindings = [],
+  instanceId,
+  componentId,
+  stateValues,
+}: {
+  visuals?: VisualNode[];
+  width: number;
+  height: number;
+  bindings?: StateBinding[];
+  instanceId?: string;
+  componentId?: string;
+  stateValues: Record<string, number>;
+}) {
+  const defs = visuals.filter((item) => item.type === 'defs');
+  const drawable = visuals.filter((item) => item.type !== 'defs');
+
+  const renderNode = (node: VisualNode, index: number): React.ReactNode => {
+    const binding = bindings.find(
+      (item) => item.target_instance === instanceId && item.visual_id && item.visual_id === node.id,
+    );
+    const transform = binding ? evaluateBindingTransform(binding.css_attribute, stateValues) : undefined;
+    const unit = normalizeVisualUnits(node, width, height);
+    const key = `${node.id || node.type}-${index}`;
+
+    // Hỗ trợ cả tag g lẫn group mang tính đệ quy (recursive) sâu
+    if (node.type === 'g' || node.type === 'group') {
+      return (
+        <g key={key} id={node.id} transform={transform}>
+          {node.children?.map(renderNode)}
+        </g>
+      );
+    }
+    if (node.type === 'rect') {
+      return (
+        <rect
+          key={key}
+          id={node.id}
+          x={unit.x}
+          y={unit.y}
+          width={unit.w}
+          height={unit.h}
+          rx={unit.rx}
+          ry={unit.ry || unit.rx}
+          fill={toCssValue(node.fill)}
+          stroke={toCssValue(node.stroke)}
+          strokeWidth={unit.strokeWidth || undefined}
+          opacity={node.opacity}
+          transform={transform}
+        />
+      );
+    }
+    if (node.type === 'circle') {
+      return (
+        <circle
+          key={key}
+          id={node.id}
+          cx={unit.cx}
+          cy={unit.cy}
+          r={unit.r}
+          fill={toCssValue(node.fill)}
+          stroke={toCssValue(node.stroke)}
+          strokeWidth={unit.strokeWidth || undefined}
+          opacity={node.opacity}
+          transform={transform}
+        />
+      );
+    }
+    if (node.type === 'ellipse') {
+      return (
+        <ellipse
+          key={key}
+          id={node.id}
+          cx={unit.cx}
+          cy={unit.cy}
+          rx={unit.rx}
+          ry={unit.ry}
+          fill={toCssValue(node.fill)}
+          stroke={toCssValue(node.stroke)}
+          strokeWidth={unit.strokeWidth || undefined}
+          opacity={node.opacity}
+          transform={transform}
+        />
+      );
+    }
+    if (node.type === 'line') {
+      return (
+        <line
+          key={key}
+          id={node.id}
+          x1={unit.x1}
+          y1={unit.y1}
+          x2={unit.x2}
+          y2={unit.y2}
+          stroke={toCssValue(node.stroke)}
+          strokeWidth={unit.strokeWidth || undefined}
+          opacity={node.opacity}
+          transform={transform}
+        />
+      );
+    }
+    if (node.type === 'path') {
+      return (
+        <path
+          key={key}
+          id={node.id}
+          d={denormalizePath(node.d, width, height)}
+          fill={node.fill === 'none' ? 'none' : toCssValue(node.fill)}
+          stroke={toCssValue(node.stroke)}
+          strokeWidth={unit.strokeWidth || undefined}
+          opacity={node.opacity}
+          transform={transform}
+        />
+      );
+    }
+    
+    if (node.type === 'text') {
+      let displayString = node.text || '';
+      const compIdLower = componentId?.toLowerCase() || '';
+      const nodeIdLower = node.id?.toLowerCase() || '';
+
+      if (compIdLower.includes('ap_suat') || nodeIdLower.includes('readout') || nodeIdLower.includes('sensor')) {
+        const pVal = stateValues['p'] ?? stateValues['pressure'] ?? stateValues['ap_suat'];
+        if (pVal !== undefined) displayString = `${pVal.toFixed(2)} atm`;
+      } else if (compIdLower.includes('chia_do') || nodeIdLower.includes('volume') || nodeIdLower.includes('level')) {
+        const vVal = stateValues['V'] ?? stateValues['volume'] ?? stateValues['the_tich'];
+        if (vVal !== undefined) displayString = `${vVal.toFixed(2)} L`;
+      } else if (compIdLower.includes('can_dien_tu') || nodeIdLower.includes('display_value')) {
+        const mVal = stateValues['m'] ?? stateValues['mass'] ?? stateValues['weight'];
+        if (mVal !== undefined) displayString = `${mVal.toFixed(2)} g`;
+      } else {
+        Object.entries(stateValues).forEach(([sKey, sVal]) => {
+          if (displayString.includes(sKey) || nodeIdLower.includes(sKey.toLowerCase())) {
+            displayString = `${sVal.toFixed(2)}`;
+          }
+        });
+      }
+
+      return (
+        <text
+          key={key}
+          id={node.id}
+          x={unit.x || unit.cx || width * safeNumber(node.x, 0.5)}
+          y={unit.y || unit.cy || height * safeNumber(node.y, 0.5)}
+          fill={toCssValue(node.fill) || '#4ade80'}
+          fontSize={unit.fontSize || 14}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          transform={transform}
+          style={{ fontFamily: 'monospace', fontWeight: 'bold' }}
+        >
+          {displayString}
+        </text>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <svg className="w-full h-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
+      <defs>
+        {defs.flatMap((defNode) =>
+          defNode.children?.map((child, index) => {
+            const stops = child.children?.map((stop, sIdx) => (
+              <stop 
+                key={`${child.id}-stop-${sIdx}`} 
+                offset={stop.offset} 
+                stopColor={stop.color || stop.stopColor} 
+              />
+            ));
+
+            if (child.type === 'linearGradient') {
+              return (
+                <linearGradient 
+                  key={`${child.id}-${index}`} 
+                  id={child.id} 
+                  x1={child.x1 ?? "0%"} 
+                  y1={child.y1 ?? "0%"} 
+                  x2={child.x2 ?? "100%"} 
+                  y2={child.y2 ?? "0%"}
+                >
+                  {stops}
+                </linearGradient>
+              );
+            }
+            if (child.type === 'radialGradient') {
+              return (
+                <radialGradient 
+                  key={`${child.id}-${index}`} 
+                  id={child.id} 
+                  cx={child.cx ?? "50%"} 
+                  cy={child.cy ?? "50%"} 
+                  r={child.r ?? "50%"}
+                  fx={child.fx}
+                  fy={child.fy}
+                >
+                  {stops}
+                </radialGradient>
+              );
+            }
+            return null;
+          }),
+        )}
+      </defs>
+      {drawable.map(renderNode)}
+    </svg>
+  );
+}
+
+// --- MAIN DASHBOARD FRAMEWORK ---
 export function Dashboard({ currentHash }: { currentHash: string }) {
-  const { theme, toggleTheme } = useTheme();
-
-  // Determine active tab from routing hash
-  const activeTab = currentHash === "#dashboard-settings"
-    ? "settings"
-    : "lab";
-
+  const activeTab = currentHash === "#dashboard-settings" ? "settings" : "lab";
   const setActiveTab = (tab: "lab" | "settings") => {
     if (tab === "lab") window.location.hash = "#dashboard";
     else if (tab === "settings") window.location.hash = "#dashboard-settings";
   };
 
-  // Tooltip hover states
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
+  const [inputText, setInputText] = useState("");
+  const [filePayload, setFilePayload] = useState<Nullable<string>>(null);
+  const [phase1Data, setPhase1Data] = useState<Nullable<Phase1Response>>(null);
+  const [phase2Data, setPhase2Data] = useState<Nullable<Phase2Response>>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [stateValues, setStateValues] = useState<Record<string, number>>({});
+  const [loadingMode, setLoadingMode] = useState<LoadingMode>('idle');
+  const [error, setError] = useState('');
 
-  // Chat State
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const [canvasMetrics, setCanvasMetrics] = useState({ scale: 1, offsetX: 0, offsetY: 0 });
+
+  const selectedComponents = useMemo(() => {
+    const components = phase1Data?.mapped_components || [];
+    return components.filter((component) => selectedIds.has(component.id));
+  }, [phase1Data, selectedIds]);
+
+  const sliderStates = useMemo(() => {
+    return phase1Data?.plan?.state?.filter((item) => Array.isArray(item.range)) || [];
+  }, [phase1Data]);
+
+  const resolvedInstances = useMemo(() => {
+    if (!phase2Data?.instances) return [];
+    return resolveInstances(phase2Data.instances, selectedComponents);
+  }, [phase2Data, selectedComponents]);
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       sender: "bot",
-      text: "Hey there! 👋 I'm MorPhysics, your personal physics lab assistant.\n\nJust send me a request and I'll build an interactive experiment for you — whether it's projectile motion, a double pendulum, elastic collisions, or planetary orbits. What would you like to explore?",
+      text: "Xin chào! 👋 Tôi là MorPhysics, trợ lý phòng thí nghiệm vật lý ảo của bạn.\n\nHãy nhập yêu cầu hoặc đề bài toán vật lý, tôi sẽ tự động thiết kế, lắp ráp và thiết lập mô hình mô phỏng tương tác thời gian thực cho bạn!",
       timestamp: new Date(),
     },
   ]);
-  const [inputText, setInputText] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Load Sim Preferences helper
-  const getSimPrefs = () => {
-    const saved = localStorage.getItem("morphysics_sim_prefs");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return {
-      defaultGravity: 9.8,
-      autoPlay: true,
-      showFPS: true,
-      showGrid: true,
-      defaultScenario: "none"
-    };
-  };
-
-  // Simulation Canvas State
-  const [simPrefs, setSimPrefs] = useState(getSimPrefs);
-  const [isPlaying, setIsPlaying] = useState(() => {
-    const prefs = getSimPrefs();
-    return prefs.defaultScenario !== "none" ? prefs.autoPlay : false;
-  });
-  const [activeScenario, setActiveScenario] = useState<
-    "none" | "projectile" | "pendulum" | "collisions" | "orbit"
-  >(() => {
-    return getSimPrefs().defaultScenario as any;
-  });
-  const [gravity, setGravity] = useState(() => {
-    return getSimPrefs().defaultGravity;
-  });
-  const [activeBodies, setActiveBodies] = useState(0);
-  const [totalEnergy, setTotalEnergy] = useState(0.0);
-  const [fps, setFps] = useState(60);
-
-  // User Profile States
-  const [firstName, setFirstName] = useState(() => localStorage.getItem("morphysics_first_name") || "Long Quan");
-  const [lastName, setLastName] = useState(() => localStorage.getItem("morphysics_last_name") || "Ton");
-  const profileName = `${lastName} ${firstName}`.trim();
-  const [profileEmail, setProfileEmail] = useState(() => localStorage.getItem("morphysics_profile_email") || "quan.ton@morphysics.io");
-
-  // Notifications Settings
-  const [notifTips, setNotifTips] = useState(() => localStorage.getItem("morphysics_notif_tips") !== "false");
-  const [notifHints, setNotifHints] = useState(() => localStorage.getItem("morphysics_notif_hints") !== "false");
-  const [notifAutoSave, setNotifAutoSave] = useState(() => localStorage.getItem("morphysics_notif_autosave") === "true");
-
-  // Confirm states for privacy cards
-  const [confirmClearChat, setConfirmClearChat] = useState(false);
-  const [confirmResetPrefs, setConfirmResetPrefs] = useState(false);
-  const [confirmClearAll, setConfirmClearAll] = useState(false);
-
-  // Show policy state inside Settings page
-  const [showPolicy, setShowPolicy] = useState(false);
-
-  // Settings sub-tab state
-  const [activeSettingsSubTab, setActiveSettingsSubTab] = useState<
-    "account" | "appearance" | "simulation" | "notifications" | "privacy" | "about"
-  >("account");
-
+  // FIX 1: Tối ưu hóa cơ chế tự động cuộn chống lệch khung UI
   useEffect(() => {
-    if (activeTab === "settings") {
-      setActiveSettingsSubTab("account");
-    }
-  }, [activeTab]);
-
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-
-  // Physics animation variables
-  const projVariables = useRef({
-    x: 50,
-    y: 250,
-    vx: 180,
-    vy: -200,
-    projectiles: [] as Array<{ x: number; y: number; vx: number; vy: number; age: number }>,
-    spawnTimer: 0,
-  });
-
-  const pendVariables = useRef({
-    theta1: Math.PI / 3,
-    theta2: Math.PI / 4,
-    omega1: 0.0,
-    omega2: 0.0,
-    trail: [] as Array<{ x: number; y: number }>,
-  });
-
-  const collisionVariables = useRef({
-    balls: [] as Array<{
-      x: number;
-      y: number;
-      r: number;
-      vx: number;
-      vy: number;
-      color: string;
-      mass: number;
-    }>,
-  });
-
-  const orbitVariables = useRef({
-    anglePlanet: 0,
-    angleMoon: 0,
-    trail: [] as Array<{ x: number; y: number }>,
-  });
-
-  // Scroll to bottom of chat — skip on initial welcome message to preserve top padding
-  useEffect(() => {
-    if (messages.length > 1) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Handle Scenario trigger
-  const handleSelectScenario = (scenario: "projectile" | "pendulum" | "collisions" | "orbit") => {
-    setActiveScenario(scenario);
-    setIsPlaying(simPrefs.autoPlay);
+  useEffect(() => {
+    const calculateMetrics = () => {
+      if (!canvasContainerRef.current) return;
+      const containerW = canvasContainerRef.current.clientWidth;
+      const containerH = canvasContainerRef.current.clientHeight;
+      
+      if (resolvedInstances && resolvedInstances.length > 0) {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        
+        resolvedInstances.forEach((instance) => {
+          const x1 = instance.x;
+          const x2 = instance.x + instance.width;
+          const y1 = instance.y;
+          const y2 = instance.y + instance.height;
+          
+          if (x1 < minX) minX = x1;
+          if (x2 > maxX) maxX = x2;
+          if (y1 < minY) minY = y1;
+          if (y2 > maxY) maxY = y2;
+        });
+        
+        const actualW = maxX - minX;
+        const actualH = maxY - minY;
+        
+        const padding = 60;
+        const scaleX = (containerW - padding * 2) / (actualW || 1);
+        const scaleY = (containerH - padding * 2) / (actualH || 1);
+        
+        const scale = Math.min(scaleX, scaleY, 3.5);
+        
+        const bbCenterX = (minX + maxX) / 2;
+        const bbCenterY = (minY + maxY) / 2;
+        const offsetX = containerW / 2 - scale * bbCenterX;
+        const offsetY = containerH / 2 - scale * bbCenterY;
+        
+        setCanvasMetrics({ scale, offsetX, offsetY });
+      } else {
+        const virtualW = INITIAL_CANVAS_SIZE[0];
+        const virtualH = INITIAL_CANVAS_SIZE[1];
+        const scaleX = containerW / virtualW;
+        const scaleY = containerH / virtualH;
+        const scale = Math.min(scaleX, scaleY) * 0.95;
+        const offsetX = (containerW - virtualW * scale) / 2;
+        const offsetY = (containerH - virtualH * scale) / 2;
+        setCanvasMetrics({ scale, offsetX, offsetY });
+      }
+    };
 
-    let scenarioName = "";
-    let botReply = "";
+    calculateMetrics();
+    window.addEventListener("resize", calculateMetrics);
+    return () => window.removeEventListener("resize", calculateMetrics);
+  }, [resolvedInstances]);
 
-    switch (scenario) {
-      case "projectile":
-        scenarioName = "Projectile Launcher";
-        botReply = "Sure! 🚀 Setting up a **Projectile Launcher** scenario for you. You can see the balls firing from a ground launcher on the left and tracking their parabolic trajectories. Adjust gravity below to watch how it impacts flight path!";
-        break;
-      case "pendulum":
-        scenarioName = "Double Pendulum";
-        botReply = "Absolutely! 🔬 Initializing a **Double Pendulum** simulation. This exhibits classic deterministic chaos. The gold trail traces the chaotic trajectory of the outer mass. Try pausing or changing gravity parameters!";
-        break;
-      case "collisions":
-        scenarioName = "Elastic Collisions";
-        botReply = "Perfect! 💥 Creating a system with **Elastic Collisions**. These spheres exchange momentum during collisions while preserving kinetic energy. The total energy stays conserved!";
-        break;
-      case "orbit":
-        scenarioName = "Planetary Orbit";
-        botReply = "Understood! 🪐 Launching **Planetary Orbit** simulation. A central star exerts gravitational force, keeping a planet and its orbiting satellite locked in stable orbit. Check the orbital path lines!";
-        break;
-    }
-
-    const newMessages: Message[] = [
-      ...messages,
-      {
-        id: `user-${Date.now()}`,
-        sender: "user",
-        text: `Launch the ${scenarioName} simulation`,
-        timestamp: new Date(),
-      },
-      {
-        id: `bot-${Date.now()}`,
-        sender: "bot",
-        text: botReply,
-        timestamp: new Date(),
-      },
-    ];
-    setMessages(newMessages);
-  };
-
-  // Clear chat
-  const handleClearChat = () => {
-    setMessages([
-      {
-        id: "welcome",
-        sender: "bot",
-        text: "Hey there! 👋 I'm MorPhysics, your personal physics lab assistant.\n\nJust send me a request and I'll build an interactive experiment for you — whether it's projectile motion, a double pendulum, elastic collisions, or planetary orbits. What would you like to explore?",
-        timestamp: new Date(),
-      },
-    ]);
-  };
-
-  // Send input message
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || loadingMode !== 'idle') return;
 
     const userText = inputText.trim();
     setInputText("");
+    setError('');
+    setPhase1Data(null);
+    setPhase2Data(null);
+    setSelectedIds(new Set());
+    setStateValues({});
+    setLoadingMode('phase1');
 
-    const newMessages: Message[] = [
-      ...messages,
-      {
-        id: `user-${Date.now()}`,
-        sender: "user",
-        text: userText,
-        timestamp: new Date(),
-      },
-    ];
+    setMessages((prev) => [
+      ...prev,
+      { id: `user-${Date.now()}`, sender: "user", text: userText, timestamp: new Date() }
+    ]);
 
-    setMessages(newMessages);
+    try {
+      const response = await apiService.runPhase1(userText, filePayload);
+      setPhase1Data(response);
+      setSelectedIds(new Set(response.mapped_components?.map((item) => item.id) || []));
 
-    // Mock bot reply
-    setTimeout(() => {
-      let botResponseText = `I've analyzed your prompt: "${userText}". ⚙️ Preparing a simulation model suited for this query... Done! Click play to run the simulation.`;
+      const initialState: Record<string, number> = {};
+      response.plan?.state?.forEach((item) => {
+        initialState[item.key] = item.initial;
+      });
       
-      // Check if they typed keywords
-      const lowerText = userText.toLowerCase();
-      if (lowerText.includes("projectile") || lowerText.includes("bullet") || lowerText.includes("launch")) {
-        setActiveScenario("projectile");
-        setIsPlaying(true);
-        botResponseText = "Recognized projectile motion command! 🚀 Setting up a Projectile Launcher simulation. Play to start.";
-      } else if (lowerText.includes("pendulum") || lowerText.includes("swing")) {
-        setActiveScenario("pendulum");
-        setIsPlaying(true);
-        botResponseText = "Recognized pendulum command! 🔬 Setting up a Double Pendulum simulation. Play to start.";
-      } else if (lowerText.includes("collision") || lowerText.includes("bounce") || lowerText.includes("elastic")) {
-        setActiveScenario("collisions");
-        setIsPlaying(true);
-        botResponseText = "Recognized collision command! 💥 Setting up a gas elastic collision container. Play to start.";
-      } else if (lowerText.includes("orbit") || lowerText.includes("gravity") || lowerText.includes("planet") || lowerText.includes("space")) {
-        setActiveScenario("orbit");
-        setIsPlaying(true);
-        botResponseText = "Recognized orbital command! 🪐 Setting up a planetary solar gravity loop. Play to start.";
-      }
+      const solvedState = evaluatePhysicsEquations(response.plan.equations || [], initialState);
+      setStateValues(solvedState);
 
       setMessages((prev) => [
         ...prev,
-        {
-          id: `bot-${Date.now()}`,
-          sender: "bot",
-          text: botResponseText,
-          timestamp: new Date(),
-        },
-      ]);
-    }, 800);
-  };
-
-  // Setup/Reset variables on active scenario changes
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const w = canvas.width;
-    const h = canvas.height;
-
-    // Reset projectile launcher variables
-    projVariables.current = {
-      x: 40,
-      y: h - 40,
-      vx: 190,
-      vy: -230,
-      projectiles: [],
-      spawnTimer: 0,
-    };
-
-    // Reset pendulum angles
-    pendVariables.current = {
-      theta1: Math.PI / 3,
-      theta2: Math.PI / 4,
-      omega1: 0.0,
-      omega2: 0.0,
-      trail: [],
-    };
-
-    // Initialize collision balls
-    const colors = ["#ffc800", "#6C8CFF", "#FF7A9E", "#cea945", "#5eead4", "#c084fc"];
-    const balls = [];
-    for (let i = 0; i < 9; i++) {
-      const radius = 16 + (i % 3) * 4;
-      balls.push({
-        x: 80 + Math.random() * (w - 160),
-        y: 80 + Math.random() * (h - 160),
-        r: radius,
-        vx: (Math.random() - 0.5) * 5,
-        vy: (Math.random() - 0.5) * 5,
-        color: colors[i % colors.length],
-        mass: radius * radius * 0.01,
-      });
-    }
-    collisionVariables.current = { balls };
-
-    // Reset orbital values
-    orbitVariables.current = {
-      anglePlanet: 0,
-      angleMoon: 0,
-      trail: [],
-    };
-
-    // Set stats
-    if (activeScenario === "none") {
-      setActiveBodies(0);
-      setTotalEnergy(0.0);
-    } else if (activeScenario === "projectile") {
-      setActiveBodies(0);
-      setTotalEnergy(0.0);
-    } else if (activeScenario === "pendulum") {
-      setActiveBodies(2);
-      setTotalEnergy(45.2);
-    } else if (activeScenario === "collisions") {
-      setActiveBodies(9);
-      setTotalEnergy(120.5);
-    } else if (activeScenario === "orbit") {
-      setActiveBodies(3); // Sun, Planet, Moon
-      setTotalEnergy(340.8);
-    }
-  }, [activeScenario]);
-
-  // Physics loop drawing & updating
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let lastTime = performance.now();
-    let frameCount = 0;
-    let fpsInterval = lastTime;
-
-    const render = () => {
-      const now = performance.now();
-      const dt = Math.min((now - lastTime) / 1000, 0.1); // cap dt at 100ms
-      lastTime = now;
-
-      // Calculate FPS
-      frameCount++;
-      if (now - fpsInterval >= 1000) {
-        setFps(Math.round((frameCount * 1000) / (now - fpsInterval)));
-        frameCount = 0;
-        fpsInterval = now;
-      }
-
-      const w = canvas.width;
-      const h = canvas.height;
-
-      // Clear canvas
-      ctx.clearRect(0, 0, w, h);
-
-      if (activeScenario === "none") {
-        // Idle view is drawn outside canvas (using DOM elements),
-        // but let's draw some ambient grid glow in canvas.
-        drawGrid(ctx, w, h);
-      } else {
-        // Active Scenario Rendering
-        drawGrid(ctx, w, h);
-
-        if (activeScenario === "projectile") {
-          const vars = projVariables.current;
-
-          // Update physics
-          if (isPlaying) {
-            vars.spawnTimer += dt;
-            if (vars.spawnTimer >= 1.2) {
-              vars.projectiles.push({
-                x: vars.x,
-                y: vars.y - 10,
-                vx: vars.vx + (Math.random() - 0.5) * 20,
-                vy: vars.vy + (Math.random() - 0.5) * 30,
-                age: 0,
-              });
-              vars.spawnTimer = 0;
-            }
-
-            // Update projectiles
-            vars.projectiles.forEach((p) => {
-              p.vy += gravity * 20 * dt; // gravity in pixels
-              p.x += p.vx * dt;
-              p.y += p.vy * dt;
-              p.age += dt;
-            });
-
-            // Filter out projectiles that hit ground or are too old
-            vars.projectiles = vars.projectiles.filter((p) => {
-              return p.y < h - 15 && p.x < w && p.x > 0;
-            });
-
-            setActiveBodies(vars.projectiles.length);
-            
-            // Calculate mock energy
-            let energy = 0;
-            vars.projectiles.forEach((p) => {
-              const velocitySq = p.vx * p.vx + p.vy * p.vy;
-              energy += 0.5 * 2.5 * (velocitySq / 2000); // normalized
-            });
-            setTotalEnergy(parseFloat(energy.toFixed(1)));
-          }
-
-          // Draw Cannon base/nozzle
-          ctx.save();
-          ctx.translate(vars.x, vars.y);
-          const angle = Math.atan2(vars.vy, vars.vx);
-          ctx.rotate(angle);
-          ctx.fillStyle = "#454C70";
-          ctx.strokeStyle = "#ffc800";
-          ctx.lineWidth = 2;
-          ctx.fillRect(0, -10, 30, 20);
-          ctx.strokeRect(0, -10, 30, 20);
-          ctx.restore();
-
-          // Cannon Base circle
-          ctx.beginPath();
-          ctx.arc(vars.x, vars.y, 14, 0, Math.PI * 2);
-          ctx.fillStyle = "#23273D";
-          ctx.fill();
-          ctx.strokeStyle = "#ffc800";
-          ctx.lineWidth = 3;
-          ctx.stroke();
-
-          // Draw Projectiles
-          vars.projectiles.forEach((p) => {
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
-            ctx.fillStyle = "#ffc800";
-            ctx.fill();
-            ctx.strokeStyle = "white";
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-
-            // Trail
-            ctx.beginPath();
-            ctx.moveTo(p.x - (p.vx * 0.05), p.y - (p.vy * 0.05));
-            ctx.lineTo(p.x, p.y);
-            ctx.strokeStyle = "rgba(255, 200, 0, 0.4)";
-            ctx.lineWidth = 3;
-            ctx.stroke();
-          });
-
-          // Draw ground Line
-          ctx.beginPath();
-          ctx.moveTo(0, h - 15);
-          ctx.lineTo(w, h - 15);
-          ctx.strokeStyle = "rgba(69, 76, 112, 0.4)";
-          ctx.lineWidth = 4;
-          ctx.stroke();
-
-        } else if (activeScenario === "pendulum") {
-          const vars = pendVariables.current;
-
-          // Double pendulum dynamics equations (approximate numeric solver)
-          if (isPlaying) {
-            const gVal = gravity * 0.5; // scaled gravity
-            const r1 = 80;
-            const r2 = 70;
-            const m1 = 10;
-            const m2 = 10;
-
-            const delta = vars.theta1 - vars.theta2;
-
-            // Denominator
-            const den1 = r1 * (2 * m1 + m2 - m2 * Math.cos(2 * vars.theta1 - 2 * vars.theta2));
-            const num1 = -gVal * (2 * m1 + m2) * Math.sin(vars.theta1) - m2 * gVal * Math.sin(vars.theta1 - 2 * vars.theta2) - 2 * Math.sin(delta) * m2 * (vars.omega2 * vars.omega2 * r2 + vars.omega1 * vars.omega1 * r1 * Math.cos(delta));
-            const alpha1 = num1 / den1;
-
-            const den2 = r2 * (2 * m1 + m2 - m2 * Math.cos(2 * vars.theta1 - 2 * vars.theta2));
-            const num2 = 2 * Math.sin(delta) * (vars.omega1 * vars.omega1 * r1 * (m1 + m2) + gVal * (m1 + m2) * Math.cos(vars.theta1) + vars.omega2 * vars.omega2 * r2 * m2 * Math.cos(delta));
-            const alpha2 = num2 / den2;
-
-            vars.omega1 += alpha1 * dt * 50;
-            vars.omega2 += alpha2 * dt * 50;
-            vars.theta1 += vars.omega1 * dt * 5;
-            vars.theta2 += vars.omega2 * dt * 5;
-
-            // Damping slightly
-            vars.omega1 *= 0.999;
-            vars.omega2 *= 0.999;
-          }
-
-          // Pivot point
-          const px = w / 2;
-          const py = 100;
-          const r1 = 80;
-          const r2 = 70;
-
-          // Coords
-          const x1 = px + r1 * Math.sin(vars.theta1);
-          const y1 = py + r1 * Math.cos(vars.theta1);
-
-          const x2 = x1 + r2 * Math.sin(vars.theta2);
-          const y2 = y1 + r2 * Math.cos(vars.theta2);
-
-          // Add trail
-          if (isPlaying) {
-            vars.trail.push({ x: x2, y: y2 });
-            if (vars.trail.length > 120) vars.trail.shift();
-          }
-
-          // Draw trail
-          if (vars.trail.length > 1) {
-            ctx.beginPath();
-            ctx.moveTo(vars.trail[0].x, vars.trail[0].y);
-            for (let i = 1; i < vars.trail.length; i++) {
-              ctx.lineTo(vars.trail[i].x, vars.trail[i].y);
-            }
-            ctx.strokeStyle = "rgba(255, 200, 0, 0.55)";
-            ctx.lineWidth = 2.5;
-            ctx.stroke();
-          }
-
-          // Draw strings
-          ctx.beginPath();
-          ctx.moveTo(px, py);
-          ctx.lineTo(x1, y1);
-          ctx.lineTo(x2, y2);
-          ctx.strokeStyle = "#454C70";
-          ctx.lineWidth = 3;
-          ctx.stroke();
-
-          // Draw pivot
-          ctx.beginPath();
-          ctx.arc(px, py, 6, 0, Math.PI * 2);
-          ctx.fillStyle = "#23273D";
-          ctx.fill();
-          ctx.strokeStyle = "#ffc800";
-          ctx.lineWidth = 2;
-          ctx.stroke();
-
-          // Draw Bob 1
-          ctx.beginPath();
-          ctx.arc(x1, y1, 14, 0, Math.PI * 2);
-          ctx.fillStyle = "#6C8CFF";
-          ctx.fill();
-          ctx.strokeStyle = "white";
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-
-          // Draw Bob 2
-          ctx.beginPath();
-          ctx.arc(x2, y2, 12, 0, Math.PI * 2);
-          ctx.fillStyle = "#FF7A9E";
-          ctx.fill();
-          ctx.strokeStyle = "white";
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-
-          // Compute Kinetic Energy (simulated)
-          if (isPlaying) {
-            const v1sq = (r1 * vars.omega1) * (r1 * vars.omega1);
-            const v2sq = v1sq + (r2 * vars.omega2) * (r2 * vars.omega2) + 2 * (r1 * vars.omega1) * (r2 * vars.omega2) * Math.cos(vars.theta1 - vars.theta2);
-            const ke = 0.5 * 10 * v1sq * 0.001 + 0.5 * 10 * v2sq * 0.001;
-            setTotalEnergy(parseFloat((ke * 10).toFixed(1)));
-          }
-
-        } else if (activeScenario === "collisions") {
-          const vars = collisionVariables.current;
-
-          // Update physics
-          if (isPlaying) {
-            vars.balls.forEach((ball) => {
-              ball.x += ball.vx * dt * 40;
-              ball.y += ball.vy * dt * 40;
-
-              // Wall bounce
-              if (ball.x - ball.r < 0) {
-                ball.x = ball.r;
-                ball.vx = -ball.vx;
-              } else if (ball.x + ball.r > w) {
-                ball.x = w - ball.r;
-                ball.vx = -ball.vx;
-              }
-
-              if (ball.y - ball.r < 0) {
-                ball.y = ball.r;
-                ball.vy = -ball.vy;
-              } else if (ball.y + ball.r > h) {
-                ball.y = h - ball.r;
-                ball.vy = -ball.vy;
-              }
-            });
-
-            // Ball collisions
-            for (let i = 0; i < vars.balls.length; i++) {
-              for (let j = i + 1; j < vars.balls.length; j++) {
-                const b1 = vars.balls[i];
-                const b2 = vars.balls[j];
-                const dx = b2.x - b1.x;
-                const dy = b2.y - b1.y;
-                const dist = Math.hypot(dx, dy);
-
-                if (dist < b1.r + b2.r) {
-                  // Collision normal
-                  const nx = dx / dist;
-                  const ny = dy / dist;
-
-                  // Relative velocity
-                  const kx = b1.vx - b2.vx;
-                  const ky = b1.vy - b2.vy;
-                  const velAlongNormal = kx * nx + ky * ny;
-
-                  if (velAlongNormal > 0) {
-                    // Impulse scalar (elastic e=1)
-                    const impulse = (2 * velAlongNormal) / (b1.mass + b2.mass);
-                    
-                    b1.vx -= impulse * b2.mass * nx;
-                    b1.vy -= impulse * b2.mass * ny;
-                    b2.vx += impulse * b1.mass * nx;
-                    b2.vy += impulse * b1.mass * ny;
-                  }
-
-                  // Separate overlaps
-                  const overlap = b1.r + b2.r - dist;
-                  b1.x -= overlap * 0.5 * nx;
-                  b1.y -= overlap * 0.5 * ny;
-                  b2.x += overlap * 0.5 * nx;
-                  b2.y += overlap * 0.5 * ny;
-                }
-              }
-            }
-
-            // Calculate total Energy
-            let energy = 0;
-            vars.balls.forEach((b) => {
-              const speedSq = b.vx * b.vx + b.vy * b.vy;
-              energy += 0.5 * b.mass * speedSq;
-            });
-            setTotalEnergy(parseFloat((energy * 4).toFixed(1)));
-          }
-
-          // Draw Balls
-          vars.balls.forEach((b) => {
-            ctx.beginPath();
-            ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-            ctx.fillStyle = b.color;
-            ctx.fill();
-            ctx.strokeStyle = "white";
-            ctx.lineWidth = 2;
-            ctx.stroke();
-
-            // Vector arrow
-            ctx.beginPath();
-            ctx.moveTo(b.x, b.y);
-            ctx.lineTo(b.x + b.vx * 3, b.y + b.vy * 3);
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-            ctx.lineWidth = 2;
-            ctx.stroke();
-          });
-
-        } else if (activeScenario === "orbit") {
-          const vars = orbitVariables.current;
-
-          if (isPlaying) {
-            vars.anglePlanet += dt * 0.5 * (10 / gravity);
-            vars.angleMoon += dt * 2.2;
-          }
-
-          const centerX = w / 2;
-          const centerY = h / 2;
-          const orbitR = 120;
-          const moonOrbitR = 25;
-
-          const planetX = centerX + orbitR * Math.cos(vars.anglePlanet);
-          const planetY = centerY + orbitR * Math.sin(vars.anglePlanet);
-
-          const moonX = planetX + moonOrbitR * Math.cos(vars.angleMoon);
-          const moonY = planetY + moonOrbitR * Math.sin(vars.angleMoon);
-
-          if (isPlaying) {
-            vars.trail.push({ x: planetX, y: planetY });
-            if (vars.trail.length > 180) vars.trail.shift();
-          }
-
-          // Draw planet orbit dashed line
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, orbitR, 0, Math.PI * 2);
-          ctx.setLineDash([5, 6]);
-          ctx.strokeStyle = "rgba(69, 76, 112, 0.35)";
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          // Draw planet trail
-          if (vars.trail.length > 1) {
-            ctx.beginPath();
-            ctx.moveTo(vars.trail[0].x, vars.trail[0].y);
-            for (let i = 1; i < vars.trail.length; i++) {
-              ctx.lineTo(vars.trail[i].x, vars.trail[i].y);
-            }
-            ctx.strokeStyle = "rgba(94, 234, 212, 0.45)";
-            ctx.lineWidth = 2;
-            ctx.stroke();
-          }
-
-          // Draw Sun (glow)
-          const sunGlow = ctx.createRadialGradient(centerX, centerY, 5, centerX, centerY, 34);
-          sunGlow.addColorStop(0, "#ffe580");
-          sunGlow.addColorStop(0.3, "#ffc800");
-          sunGlow.addColorStop(1, "rgba(255, 200, 0, 0)");
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, 34, 0, Math.PI * 2);
-          ctx.fillStyle = sunGlow;
-          ctx.fill();
-
-          // Sun Core
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, 18, 0, Math.PI * 2);
-          ctx.fillStyle = "#ffc800";
-          ctx.fill();
-          ctx.strokeStyle = "white";
-          ctx.lineWidth = 2;
-          ctx.stroke();
-
-          // Draw Planet
-          ctx.beginPath();
-          ctx.arc(planetX, planetY, 11, 0, Math.PI * 2);
-          ctx.fillStyle = "#6C8CFF";
-          ctx.fill();
-          ctx.strokeStyle = "white";
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-
-          // Draw moon orbit path
-          ctx.beginPath();
-          ctx.arc(planetX, planetY, moonOrbitR, 0, Math.PI * 2);
-          ctx.strokeStyle = "rgba(255,255,255,0.08)";
-          ctx.lineWidth = 1;
-          ctx.stroke();
-
-          // Draw Moon
-          ctx.beginPath();
-          ctx.arc(moonX, moonY, 4, 0, Math.PI * 2);
-          ctx.fillStyle = "#b6bcda";
-          ctx.fill();
-          ctx.strokeStyle = "white";
-          ctx.lineWidth = 1;
-          ctx.stroke();
-
-          // Mock energy based on orbital velocity
-          if (isPlaying) {
-            const orbitVel = 2 * Math.PI * orbitR * 0.5 * (10 / gravity);
-            const ke = 0.5 * 6.5 * orbitVel * orbitVel * 0.005;
-            setTotalEnergy(parseFloat((ke * 10).toFixed(1)));
-          }
+        { 
+          id: `bot-${Date.now()}`, 
+          sender: "bot", 
+          text: `🎯 **Phân tích hiện tượng:** ${response.plan.summary}\n\nĐã lập sơ đồ cấu phần linh kiện. Bạn có thể xem trước hình khối trực quan và loại bỏ thiết bị không cần thiết ở bảng phía dưới trước khi dựng không gian Lab.`, 
+          timestamp: new Date() 
         }
-      }
-
-      if (simPrefs.showFPS && activeScenario !== "none") {
-        ctx.save();
-        ctx.font = "bold 11px sans-serif";
-        ctx.fillStyle = theme === "dark" ? "rgba(255, 200, 0, 0.85)" : "rgba(206, 169, 69, 0.85)";
-        ctx.fillText(`FPS: ${fps}`, w - 55, 20);
-        ctx.restore();
-      }
-
-      if (isPlaying || activeScenario === "none") {
-        animationFrameRef.current = requestAnimationFrame(render);
-      }
-    };
-
-    if (isPlaying || activeScenario === "none") {
-      animationFrameRef.current = requestAnimationFrame(render);
-    } else {
-      // Draw static frame
-      drawGrid(ctx, canvas.width, canvas.height);
-      render();
+      ]);
+    } catch (err) {
+      const errMsg = formatError(err);
+      setError(errMsg);
+      setMessages((prev) => [
+        ...prev,
+        { id: `bot-${Date.now()}`, sender: "bot", text: `❌ Đã xảy ra lỗi hệ thống: ${errMsg}`, timestamp: new Date() }
+      ]);
+    } finally {
+      setLoadingMode('idle');
     }
-
-    return () => {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    };
-  }, [isPlaying, activeScenario, gravity, simPrefs.showFPS, simPrefs.showGrid, theme]);
-
-  // Handle Resize canvas
-  useEffect(() => {
-    const handleResize = () => {
-      const canvas = canvasRef.current;
-      const container = canvasContainerRef.current;
-      if (!canvas || !container) return;
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
-    };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  const drawGrid = (ctx: CanvasRenderingContext2D, w: number, h: number) => {
-    if (!simPrefs.showGrid) return;
-    ctx.save();
-    ctx.strokeStyle = "rgba(69, 76, 112, 0.08)";
-    ctx.lineWidth = 1;
-    const gridSpacing = 40;
-    for (let x = 0; x < w; x += gridSpacing) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
-    }
-    for (let y = 0; y < h; y += gridSpacing) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
-    }
-    ctx.restore();
   };
+
+  const handleConfirmComponents = async () => {
+    if (!phase1Data || selectedComponents.length === 0 || loadingMode !== 'idle') return;
+
+    setError('');
+    setLoadingMode('phase2');
+
+    try {
+      const mappedComponentsForPhase2 = selectedComponents.map((component) => ({
+        id: component.id,
+        base_size: component.base_size,
+        visuals: component.visuals as unknown as Record<string, string | number>[],
+        anchor_points: component.anchor_points.map((anchor) => anchor.id),
+        regions: component.regions as unknown as Record<string, string | number>[],
+      }));
+
+      const response = await apiService.runPhase2(
+        INITIAL_CANVAS_SIZE,
+        {
+          summary: phase1Data.plan.summary,
+          state: (phase1Data.plan.state || []) as PhysicsStateItem[],
+          equations: (phase1Data.plan.equations || []) as string[],
+        },
+        mappedComponentsForPhase2,
+        filePayload,
+      );
+
+      setPhase2Data(response);
+
+      setMessages((prev) => {
+        const cleanedHistory = prev.map((msg) => {
+          if (msg.sender === "bot" && msg.text.includes("Đã lập sơ đồ cấu phần linh kiện")) {
+            return {
+              ...msg,
+              text: msg.text.split("\n\nĐã lập sơ đồ cấu phần linh kiện")[0],
+            };
+          }
+          return msg;
+        });
+
+        return [
+          ...cleanedHistory,
+          { 
+            id: `bot-${Date.now()}`, 
+            sender: "bot", 
+            text: "⚙️ Phòng thí nghiệm ảo đã được thiết lập thành công! Hãy kéo các thanh trượt điều khiển để theo dõi các thông số cập nhật tương tác.", 
+            timestamp: new Date() 
+          }
+        ];
+      });
+    } catch (err) {
+      setError(formatError(err));
+    } finally {
+      setLoadingMode('idle');
+    }
+  };
+
+  const handleSliderChange = (key: string, val: number) => {
+    if (!phase1Data) return;
+    const nextRawState = { ...stateValues, [key]: val };
+    const nextSolvedState = evaluatePhysicsEquations(phase1Data.plan.equations || [], nextRawState);
+    setStateValues(nextSolvedState);
+  };
+
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setFilePayload(String(reader.result));
+    reader.readAsDataURL(file);
+  };
+
+  const applySnapshot = (snapshot: Snapshot) => {
+    setStateValues((prev) => {
+      const next = { ...prev };
+      snapshot.values.forEach((item) => {
+        if (typeof item.values === 'number') next[item.key] = item.values;
+      });
+      return phase1Data ? evaluatePhysicsEquations(phase1Data.plan.equations || [], next) : next;
+    });
+  };
+
+  const [firstName, setFirstName] = useState(() => localStorage.getItem("morphysics_first_name") || "Long Quan");
+  const [lastName, setLastName] = useState(() => localStorage.getItem("morphysics_last_name") || "Ton");
+  const [profileEmail, setProfileEmail] = useState(() => localStorage.getItem("morphysics_profile_email") || "quan.ton@morphysics.io");
 
   return (
-    <section className="relative h-screen bg-cloud dark:bg-slate-ink text-slate-deep dark:text-white transition-colors duration-500 overflow-hidden font-sans">
-      {/* Background aurora gradients — Hero-style multi-blob */}
-      <div className="aurora-blob left-[-12%] top-[-15%] h-[500px] w-[500px] bg-gold/20 dark:bg-gold/10 pointer-events-none" />
-      <div className="aurora-blob bottom-[-15%] right-[-8%] h-[560px] w-[560px] bg-indigo-500/25 dark:bg-indigo-500/18 pointer-events-none" />
-      <div className="aurora-blob right-[-8%] top-[-5%] h-[420px] w-[420px] bg-gold/15 dark:bg-gold/8 pointer-events-none" />
-      <div className="aurora-blob left-[30%] top-[30%] h-[360px] w-[360px] bg-indigo-400/12 dark:bg-indigo-500/10 pointer-events-none" />
-      <div className="aurora-blob left-[33%] top-[50%] h-[280px] w-[280px] bg-rose-400/6 dark:bg-rose-400/10 pointer-events-none" />
+    <section className="h-screen w-screen flex flex-col bg-cloud dark:bg-slate-ink text-slate-deep dark:text-white transition-colors duration-500 overflow-hidden font-sans relative pt-20">
+      <div className="aurora-blob left-[-12%] top-[-15%] h-[500px] w-[500px] bg-gold/20 dark:bg-gold/10 pointer-events-none absolute" />
+      <div className="aurora-blob bottom-[-15%] right-[-8%] h-[560px] w-[560px] bg-indigo-500/25 dark:bg-indigo-500/18 pointer-events-none absolute" />
 
-      {/* Dotted texture */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-35 dark:opacity-15 z-0"
-        style={{
-          backgroundImage:
-            "radial-gradient(var(--dot-color, rgba(35,39,61,0.08)) 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
-        }}
-      />
-
-      {/* Workspace Navbar */}
-      <header className="fixed inset-x-0 top-0 z-50 nav-glass py-2.5 h-20 flex items-center justify-center px-6 shadow-sm">
-        {/* Center Floating Capsule / Dynamic Island */}
-        <motion.nav
-          layout
-          className="relative h-14 flex items-center overflow-visible rounded-full border border-slate-deep/10 bg-white/50 shadow-sm dark:border-white/10 dark:bg-white/5 px-3 z-10 gap-2.5"
-          transition={{ type: "spring", stiffness: 380, damping: 30 }}
-        >
-          {/* Logo */}
-          <motion.a
-            layout
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              window.location.hash = "";
-            }}
-            className="group flex items-center gap-2 pl-4 pr-3 py-1.5 text-slate-deep dark:text-white cursor-pointer select-none"
-          >
-            <div className="h-8 w-8 flex items-center justify-center">
-              <Player
-                autoplay
-                loop
-                src="/assets/Mascot.json"
-                style={{ height: "32px", width: "32px" }}
-              />
-            </div>
-            <span className="font-display text-base font-bold tracking-tight">
-              Morphysics
-            </span>
-          </motion.a>
-
-          {/* Separator */}
-          <motion.div layout className="h-7 w-[1px] bg-slate-deep/10 dark:bg-white/10" />
-
-          {/* Navigation Tabs */}
-          <motion.ul layout className="flex items-center gap-2">
-            {/* Tab: Interactive Lab */}
-            <motion.li layout>
-              <motion.button
-                layout
-                type="button"
-                onClick={() => setActiveTab("lab")}
-                onMouseEnter={() => setHoveredTab("lab")}
-                onMouseLeave={() => setHoveredTab(null)}
-                className={cn(
-                  "relative flex h-11 min-w-[44px] items-center justify-center rounded-full cursor-pointer border border-transparent transition-colors duration-200 px-3",
-                  activeTab === "lab"
-                    ? "bg-gold text-slate-deep shadow-md font-bold"
-                    : "text-slate-gray hover:text-slate-deep dark:text-white/60 dark:hover:text-white hover:bg-white/20 dark:hover:bg-white/10 hover:border-slate-deep/5 dark:hover:border-white/10"
-                )}
-                transition={{ type: "spring", stiffness: 380, damping: 30 }}
-              >
+      <header className="h-20 fixed top-0 left-0 right-0 nav-glass flex items-center justify-center px-6 shadow-sm border-b border-slate-deep/5 dark:border-white/5 z-50">
+        <nav className="h-14 flex items-center rounded-full border border-slate-deep/10 bg-white/50 shadow-sm dark:border-white/10 dark:bg-white/5 px-3 gap-2.5">
+          <a href="#" onClick={(e) => { e.preventDefault(); setPhase1Data(null); setPhase2Data(null); }} className="group flex items-center gap-2 pl-4 pr-3 py-1.5 cursor-pointer select-none">
+            <span className="font-display text-base font-bold tracking-tight">MorPhysics</span>
+          </a>
+          <div className="h-7 w-[1px] bg-slate-deep/10 dark:bg-white/10" />
+          <ul className="flex items-center gap-2">
+            <li>
+              <button type="button" onClick={() => setActiveTab("lab")} onMouseEnter={() => setHoveredTab("lab")} onMouseLeave={() => setHoveredTab(null)} className={cn("relative flex h-11 min-w-[44px] items-center justify-center rounded-full cursor-pointer px-3", activeTab === "lab" ? "bg-gold text-slate-deep shadow-md font-bold" : "text-slate-gray dark:text-white/60 hover:bg-white/10")}>
                 <div className="flex items-center gap-2">
                   <AnimatePresence initial={false}>
-                    {hoveredTab === "lab" && (
-                      <motion.span
-                        initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: "auto", opacity: 1 }}
-                        exit={{ width: 0, opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="overflow-hidden whitespace-nowrap text-sm font-black font-sans uppercase tracking-wide pl-1"
-                      >
-                        Interactive Lab
-                      </motion.span>
-                    )}
+                    {hoveredTab === "lab" && <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: "auto", opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="overflow-hidden whitespace-nowrap text-sm font-black uppercase tracking-wide pl-1">Phòng Lab</motion.span>}
                   </AnimatePresence>
-                  <Atom className="size-5.5 shrink-0" />
+                  <Atom className="size-5.5" />
                 </div>
-              </motion.button>
-            </motion.li>
-
-            {/* Tab: Settings */}
-            <motion.li layout>
-              <motion.button
-                layout
-                type="button"
-                onClick={() => setActiveTab("settings")}
-                onMouseEnter={() => setHoveredTab("settings")}
-                onMouseLeave={() => setHoveredTab(null)}
-                className={cn(
-                  "relative flex h-11 min-w-[44px] items-center justify-center rounded-full cursor-pointer border border-transparent transition-colors duration-200 px-3",
-                  activeTab === "settings"
-                    ? "bg-gold text-slate-deep shadow-md font-bold"
-                    : "text-slate-gray hover:text-slate-deep dark:text-white/60 dark:hover:text-white hover:bg-white/20 dark:hover:bg-white/10 hover:border-slate-deep/5 dark:hover:border-white/10"
-                )}
-                transition={{ type: "spring", stiffness: 380, damping: 30 }}
-              >
+              </button>
+            </li>
+            <li>
+              <button type="button" onClick={() => setActiveTab("settings")} onMouseEnter={() => setHoveredTab("settings")} onMouseLeave={() => setHoveredTab(null)} className={cn("relative flex h-11 min-w-[44px] items-center justify-center rounded-full cursor-pointer px-3", activeTab === "settings" ? "bg-gold text-slate-deep shadow-md font-bold" : "text-slate-gray dark:text-white/60 hover:bg-white/10")}>
                 <div className="flex items-center gap-2">
-                  <Settings className="size-5.5 shrink-0" />
+                  <Settings className="size-5.5" />
                   <AnimatePresence initial={false}>
-                    {hoveredTab === "settings" && (
-                      <motion.span
-                        initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: "auto", opacity: 1 }}
-                        exit={{ width: 0, opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="overflow-hidden whitespace-nowrap text-sm font-black font-sans uppercase tracking-wide pr-1"
-                      >
-                        Settings
-                      </motion.span>
-                    )}
+                    {hoveredTab === "settings" && <motion.span initial={{ width: 0, opacity: 0 }} animate={{ width: "auto", opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="overflow-hidden whitespace-nowrap text-sm font-black uppercase tracking-wide pr-1">Cấu Hình</motion.span>}
                   </AnimatePresence>
                 </div>
-              </motion.button>
-            </motion.li>
-          </motion.ul>
-
-          {/* Separator */}
-          <motion.div layout className="h-7 w-[1px] bg-slate-deep/10 dark:bg-white/10" />
-
-          {/* Right Side ThemeToggle */}
-          <motion.div layout className="pr-2 flex items-center justify-center">
-            <ThemeToggle className="size-11 p-2 hover:bg-white/20 dark:hover:bg-white/10 hover:border-slate-deep/5 dark:hover:border-white/10 border border-transparent rounded-full shadow-none bg-transparent cursor-pointer transition-colors duration-200" />
-          </motion.div>
-        </motion.nav>
+              </button>
+            </li>
+          </ul>
+          <div className="h-7 w-[1px] bg-slate-deep/10 dark:bg-white/10" />
+          <div className="pr-2 flex items-center justify-center">
+            <ThemeToggle className="size-11 rounded-full shadow-none" />
+          </div>
+        </nav>
       </header>
 
-      {/* Main Container below navbar — sits below the fixed 80px header */}
-      <div className="absolute inset-0 top-20 z-10 overflow-hidden">
+      <div className="flex-1 min-h-0 relative z-10 overflow-hidden">
         {activeTab === "lab" ? (
-          // PAGE: INTERACTIVE LAB (Split view fitting screen height)
           <div className="h-full w-full flex flex-col lg:flex-row overflow-hidden">
-            
-            {/* Left Chatbot Column */}
-            <div className="flex flex-col w-full lg:w-[400px] xl:w-[440px] shrink-0 h-[50vh] lg:h-full bg-white dark:bg-[#1a1d2e] border-r border-slate-deep/10 dark:border-white/10 overflow-hidden relative transition-colors duration-500">
-              
-              {/* Chat Messages Log */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-5 min-h-0">
+            {/* FIX CONTAINER CHAT: Gán ref vào div này để tự cuộn khu trú */}
+            <div className="flex flex-col w-full lg:w-[420px] xl:w-[460px] shrink-0 h-[45vh] lg:h-full bg-white dark:bg-[#1a1d2e] border-r border-slate-deep/10 dark:border-white/10 overflow-hidden relative transition-colors duration-500">
+              <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-5 space-y-5 min-h-0">
                 {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={cn(
-                      "flex gap-3 text-base font-sans",
-                      msg.sender === "user" ? "justify-end" : "justify-start"
-                    )}
-                  >
-                    {msg.sender === "bot" && (
-                      <div className="size-8 flex items-center justify-center rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 p-0.5 border border-gold/15 shrink-0 mt-0.5">
-                        <Player
-                          autoplay
-                          loop
-                          src="/assets/Mascot.json"
-                          style={{ height: "24px", width: "24px" }}
-                        />
-                      </div>
-                    )}
-                    <div
-                      className={cn(
-                        "rounded-2xl px-4 py-3 max-w-[80%] whitespace-pre-line leading-relaxed text-base font-sans",
-                        msg.sender === "user"
-                          ? "bg-gold/15 dark:bg-gold/10 border border-gold/20 dark:border-gold/10 text-slate-deep dark:text-white font-medium rounded-tr-none"
-                          : "bg-indigo-50/50 dark:bg-slate-ink/50 border border-slate-deep/5 dark:border-white/5 text-slate-deep dark:text-white/90 rounded-tl-none"
-                      )}
-                    >
+                  <div key={msg.id} className={cn("flex gap-3 text-base font-sans", msg.sender === "user" ? "justify-end" : "justify-start")}>
+                    <div className={cn("rounded-2xl px-4 py-3 max-w-[85%] whitespace-pre-line leading-relaxed text-sm", msg.sender === "user" ? "bg-gold/20 text-slate-deep dark:text-white border border-gold/30 rounded-tr-none" : "bg-indigo-50/50 dark:bg-slate-ink/50 border border-slate-deep/5 dark:border-white/5 rounded-tl-none")}>
                       {msg.text}
                     </div>
                   </div>
                 ))}
-                <div ref={messagesEndRef} />
+
+                {phase1Data && !phase2Data && loadingMode === 'idle' && (
+                  <div className="mt-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs uppercase tracking-wider text-slate-400">Linh kiện trong mô hình</span>
+                      <small className="text-xs font-bold text-gold">{selectedComponents.length} đã kích hoạt</small>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3 max-h-[240px] overflow-y-auto pr-1">
+                      {phase1Data.mapped_components.map((component) => {
+                        const isSelected = selectedIds.has(component.id);
+                        const size = getComponentSize(component);
+                        return (
+                          <div 
+                            key={component.id} 
+                            onClick={() => {
+                              const next = new Set(selectedIds);
+                              if (next.has(component.id)) next.delete(component.id);
+                              else next.add(component.id);
+                              setSelectedIds(next);
+                            }} 
+                            className={cn(
+                              "group flex flex-col p-2 rounded-xl border bg-white dark:bg-slate-800/80 cursor-pointer transition-all hover:scale-[1.02]", 
+                              isSelected ? "border-gold ring-1 ring-gold/30 shadow-md" : "border-slate-100 dark:border-slate-700/60 opacity-60"
+                            )}
+                          >
+                            <div className="w-full h-24 bg-slate-50 dark:bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center p-1 mb-2">
+                              <VisualRenderer
+                                visuals={component.visuals as unknown as VisualNode[]}
+                                width={size.width}
+                                height={size.height}
+                                componentId={component.id}
+                                stateValues={stateValues}
+                              />
+                            </div>
+                            <p className="text-[11px] font-bold text-center line-clamp-1 text-slate-700 dark:text-slate-200">
+                              {component.name}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button type="button" onClick={handleConfirmComponents} className="w-full py-3 rounded-xl bg-gold text-slate-deep text-xs font-black uppercase tracking-wider transition-all shadow-lg active:scale-95">
+                      🚀 Khởi dựng mô hình phòng Lab
+                    </button>
+                  </div>
+                )}
+
+                {error && <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs">{error}</div>}
               </div>
 
-              {/* Chat Input Field Form */}
-              <form
-                onSubmit={handleSendMessage}
-                className="p-4 border-t border-slate-deep/5 dark:border-white/5 bg-white dark:bg-[#1a1d2e] flex items-center gap-2.5"
-              >
-                <div className="flex items-center gap-1 shrink-0">
-                  {/* Reset chat button */}
-                  <button
-                    type="button"
-                    title="Clear chat history"
-                    onClick={handleClearChat}
-                    className="p-2 rounded-xl text-slate-gray/70 hover:text-red-400 dark:text-white/50 dark:hover:text-red-400 transition-colors"
-                  >
-                    <Trash2 className="size-5" />
-                  </button>
-
-                  {/* Upload Image */}
-                  <button
-                    type="button"
-                    title="Upload image analysis"
-                    className="p-2 rounded-xl text-slate-gray/70 hover:text-gold dark:text-white/50 dark:hover:text-gold transition-colors"
-                  >
+              <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-deep/5 dark:border-white/5 bg-white dark:bg-[#1a1d2e] flex flex-col gap-3">
+                <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.txt" onChange={handleFileChange} className="hidden" />
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className={cn("p-2 rounded-xl text-slate-gray/70 transition-colors", filePayload ? "text-emerald-500 bg-emerald-500/10" : "hover:text-gold")}>
                     <ImageIcon className="size-5" />
                   </button>
+                  <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder={loadingMode === 'phase1' ? "Đang phân tích..." : "Nhập bài toán hoặc hiện tượng vật lý..."} className="flex-1 px-4 py-2.5 rounded-2xl border border-slate-deep/10 dark:border-white/10 bg-white/50 dark:bg-slate-ink/40 text-sm focus:outline-none focus:border-gold transition-all" />
+                  <button type="submit" disabled={loadingMode !== 'idle'} className="size-10 rounded-2xl bg-gold text-slate-deep flex items-center justify-center shrink-0 transition-all active:scale-95">
+                    <Send className="size-4" />
+                  </button>
                 </div>
-
-                <input
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder="Ask AI or type 'projectile motion'..."
-                  className="flex-1 px-4 py-2.5 rounded-2xl border border-slate-deep/10 dark:border-white/10 bg-white/50 dark:bg-slate-ink/40 text-slate-deep dark:text-white focus:outline-none focus:border-gold dark:focus:border-gold text-base transition-all font-sans"
-                />
-
-                {/* Send action */}
-                <button
-                  type="submit"
-                  className="size-10 rounded-2xl bg-gold hover:bg-gold-hover text-slate-deep flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer shrink-0"
-                >
-                  <Send className="size-4.5" />
-                </button>
               </form>
-
             </div>
 
-            {/* Right Simulation Column */}
-            <div className="flex-1 flex flex-col h-full overflow-hidden">
-              
-              {/* Canvas Physics Workspace */}
-              <div
-                ref={canvasContainerRef}
-                className="flex-1 relative bg-slate-soft/[0.1] dark:bg-slate-ink/[0.3] overflow-hidden flex items-center justify-center"
-              >
-                {/* HTML5 Canvas */}
-                <canvas
-                  ref={canvasRef}
-                  className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-                />
-
-                {/* Idle overlay when no scenario is running */}
-                {activeScenario === "none" && (
-                  <div className="relative z-10 flex flex-col items-center max-w-sm text-center p-6 bg-white/30 dark:bg-[#1a1d2e]/30 backdrop-blur-[2px] rounded-3xl border border-slate-deep/5 dark:border-white/5 shadow-sm">
-                    {/* Big squircle Play button */}
-                    <button
-                      type="button"
-                      onClick={() => handleSelectScenario("projectile")}
-                      className="size-16 rounded-[1.75rem] bg-gold/15 dark:bg-gold/10 border border-gold/30 hover:bg-gold hover:text-slate-deep text-gold flex items-center justify-center transition-all duration-350 hover:shadow-lg hover:shadow-gold/20 hover:scale-105 mb-4 group cursor-pointer"
-                    >
-                      <Play className="size-7 fill-current group-hover:scale-110 transition-transform" />
-                    </button>
-                    <h4 className="font-sans text-lg font-bold text-slate-deep dark:text-white mb-2">
-                      Simulation is Idle
-                    </h4>
-                    <p className="text-sm text-slate-gray/80 dark:text-white/50 leading-relaxed font-sans px-4">
-                      Enter a prompt or click the play button above to start a live physics simulation.
+            <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+              <div ref={canvasContainerRef} className="flex-1 relative bg-slate-soft/[0.1] dark:bg-slate-ink/[0.3] overflow-hidden">
+                
+                {!phase2Data && loadingMode === 'idle' && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
+                    <div className="size-16 rounded-[1.75rem] bg-gold/10 border border-gold/30 flex items-center justify-center text-gold mb-4 animate-pulse">
+                      <Atom className="size-7" />
+                    </div>
+                    <h4 className="text-md font-bold mb-1">Hệ thống sẵn sàng</h4>
+                    <p className="text-xs text-slate-gray/80 dark:text-white/50 max-w-xs">
+                      Hãy nhập câu hỏi lý thuyết hoặc bài tập tính toán ở khung bên để bắt đầu mô phỏng trực quan.
                     </p>
+                  </div>
+                )}
+
+                {loadingMode !== 'idle' && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-ink/20 backdrop-blur-sm z-30 space-y-3">
+                    <div className="size-12 rounded-full border-4 border-gold border-t-transparent animate-spin" />
+                    <span className="text-xs font-semibold text-gold tracking-wide">
+                      {loadingMode === 'phase1' ? 'AI đang phân tích hiện tượng...' : 'Đang xử lý kết nối cấu trúc liên kết hình học...'}
+                    </span>
+                  </div>
+                )}
+
+                {phase2Data && loadingMode === 'idle' && (
+                  <div className="absolute inset-0 w-full h-full pointer-events-none select-none">
+                    {resolvedInstances.map((instance) => {
+                      const component = selectedComponents.find((item) => item.id === instance.component_id);
+                      if (!component) return null;
+
+                      const leftPos = canvasMetrics.offsetX + instance.x * canvasMetrics.scale;
+                      const topPos = canvasMetrics.offsetY + instance.y * canvasMetrics.scale;
+                      const finalW = instance.width * canvasMetrics.scale;
+                      const finalH = instance.height * canvasMetrics.scale;
+
+                      return (
+                        <div
+                          key={instance.instance_id}
+                          className="absolute pointer-events-auto"
+                          style={{
+                            left: `${leftPos}px`,
+                            top: `${topPos}px`,
+                            width: `${finalW}px`,
+                            height: `${finalH}px`,
+                            zIndex: instance.z_index || 1,
+                          }}
+                        >
+                          <VisualRenderer
+                            visuals={component.visuals as unknown as VisualNode[]}
+                            width={instance.width}
+                            height={instance.height}
+                            instanceId={instance.instance_id}
+                            componentId={component.id}
+                            bindings={phase2Data.state_bindings || []}
+                            stateValues={stateValues}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
-              {/* Simulation Controls Bar — only shown when a scenario is active */}
-              {activeScenario !== "none" && (
-                <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-3 border-t border-slate-deep/5 dark:border-white/5 bg-white/50 dark:bg-white/2 select-none">
-                  {/* Play/Pause & Reset */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsPlaying(!isPlaying)}
-                      className={cn(
-                        "flex items-center justify-center p-2 rounded-xl border text-xs font-bold transition-all shadow-sm",
-                        isPlaying
-                          ? "border-amber-500 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20"
-                          : "border-emerald-500 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
-                      )}
-                      title={isPlaying ? "Pause simulation" : "Resume simulation"}
-                    >
-                      {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
-                    </button>
-
-                    <button
-                      type="button"
-                      title="Reset simulation"
-                      onClick={() => {
-                        const prev = activeScenario;
-                        setActiveScenario("none");
-                        setTimeout(() => setActiveScenario(prev), 20);
-                      }}
-                      className="p-2 rounded-xl border border-slate-deep/5 bg-slate-soft/30 dark:border-white/5 dark:bg-white/5 text-slate-gray dark:text-white/60 hover:text-gold dark:hover:text-gold transition-colors"
-                    >
-                      <RotateCcw className="size-4" />
-                    </button>
-                  </div>
-
-                  {/* Engine Stats */}
-                  <div className="flex items-center gap-5">
-                    <div className="flex flex-col">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-gray/70 dark:text-white/40">
-                        Bodies
-                      </span>
-                      <span className="text-xs font-extrabold text-indigo-500 dark:text-indigo-400">
-                        {activeBodies}
-                      </span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-gray/70 dark:text-white/40">
-                        Energy
-                      </span>
-                      <span className="text-xs font-extrabold text-emerald-500 dark:text-emerald-400">
-                        {totalEnergy.toFixed(1)} J
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Gravity Slider */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex flex-col">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-gray/70 dark:text-white/40">
-                        Gravity
-                      </span>
-                      <span className="text-xs font-extrabold text-gold">
-                        {gravity.toFixed(1)} m/s²
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={20}
-                      step={0.5}
-                      value={gravity}
-                      onChange={(e) => setGravity(parseFloat(e.target.value))}
-                      className="w-20 sm:w-24 h-1 accent-gold cursor-pointer"
-                    />
-                  </div>
-                </div>
-              )}
-
-            </div>
-
-          </div>
-        ) : (
-          // PAGE: SETTINGS SUBPAGE
-          // PAGE: SETTINGS SUBPAGE
-          <div className="h-full w-full flex flex-col md:flex-row relative overflow-hidden">
-            
-            {/* Left Column: Sidebar Navigation (Directly integrated into full frame) */}
-            <div className="w-full md:w-[290px] shrink-0 bg-slate-soft/30 dark:bg-[#171a2e]/45 backdrop-blur-md p-8 flex flex-col justify-between border-b md:border-b-0 md:border-r border-slate-deep/10 dark:border-white/10 relative z-10">
-              <div className="space-y-8">
-                 {/* Avatar Profile Section */}
-                 <div className="flex flex-col items-center text-center">
-                   {/* Welcome message on top */}
-                   <span className="font-display italic font-extrabold text-2xl text-gold mb-4">
-                     Welcome, {firstName}
-                   </span>
-                   {/* Avatar circle */}
-                   <div className="relative h-24 w-24 mb-4 group">
-                     <div className="h-full w-full rounded-full overflow-hidden bg-slate-deep/5 dark:bg-white/10 border-2 border-gold/50 flex items-center justify-center text-3xl text-gold font-bold shadow-lg transition-transform duration-300 group-hover:scale-105">
-                       {profileName ? (profileName === "Ton Long Quan" ? "TLQ" : profileName.split(" ").map(n => n[0]).join("").slice(0, 3).toUpperCase()) : "TLQ"}
-                     </div>
-                     <button
-                       type="button"
-                       className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-gold text-slate-deep shadow-md border-2 border-cloud dark:border-[#171a2e] transition-transform active:scale-90 cursor-pointer"
-                       onClick={() => alert("Photo upload coming soon with backend integration!")}
-                       title="Change Photo"
-                     >
-                       <Camera className="size-4" />
-                     </button>
-                   </div>
-                   {/* Full Name */}
-                   <h4 className="font-sans text-base font-semibold text-slate-gray/80 dark:text-white/60 mt-1 truncate max-w-full px-2">
-                     {profileName}
-                   </h4>
-                   {/* Plan Box */}
-                   <div className="mt-3 px-5 py-2 rounded-xl bg-gold/15 dark:bg-gold/10 border border-gold/30 text-gold font-sans font-bold text-sm tracking-wide uppercase select-none">
-                     Premium Plan
-                   </div>
-                 </div>
-
-                {/* Divider */}
-                <div className="h-[1px] w-full bg-slate-deep/10 dark:bg-white/10" />
-
-                {/* Navigation Sidebar Tabs */}
-                <nav className="space-y-2">
-                  {[
-                    { id: "account", label: "Account Profile", icon: User },
-                    { id: "appearance", label: "Appearance", icon: Sparkles },
-                    { id: "simulation", label: "Simulation Prefs", icon: Sliders },
-                    { id: "notifications", label: "Notifications", icon: Bell },
-                    { id: "privacy", label: "Privacy & Data", icon: Lock },
-                    { id: "about", label: "About Morphysics", icon: Info }
-                  ].map((tab) => {
-                    const Icon = tab.icon;
-                    const isActive = activeSettingsSubTab === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setActiveSettingsSubTab(tab.id as any)}
-                        className={cn(
-                          "w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-sm font-bold text-left transition-all duration-200 cursor-pointer select-none",
-                          isActive
-                            ? "bg-gold text-slate-deep shadow-md scale-[1.02]"
-                            : "text-slate-deep/70 dark:text-white/70 hover:text-slate-deep dark:hover:text-white hover:bg-slate-deep/5 dark:hover:bg-white/5"
-                        )}
-                      >
-                        <Icon className="size-5 shrink-0" />
-                        <span>{tab.label}</span>
-                      </button>
-                    );
-                  })}
-                </nav>
-              </div>
-
-              {/* Empty footer area replacing version info */}
-              <div className="mt-8 pt-4 text-center font-sans">
-              </div>
-            </div>
-
-            {/* RIGHT COLUMN: Settings Content Area */}
-            <div className="flex-1 overflow-y-auto p-6 sm:p-10 md:p-14 lg:p-16 relative z-10 flex flex-col justify-between">
-              
-              {/* Page Content switches */}
-              <div className="flex-1 max-w-4xl">
-                <AnimatePresence mode="wait">
-                  {activeSettingsSubTab === "account" && (
-                    <motion.div
-                      key="account"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="space-y-8"
-                    >
-                      <div className="pb-3 border-b border-slate-deep/10 dark:border-white/10">
-                        <h3 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-                          <span className="font-sans text-slate-deep dark:text-white">Account </span>
-                          <span className="font-display italic font-semibold text-gold">Profile.</span>
-                        </h3>
-                      </div>
-
-                      <div className="space-y-6 max-w-2xl">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div>
-                            <label className="text-sm sm:text-base font-bold uppercase tracking-wider text-slate-deep/80 dark:text-white/60 block mb-2 font-sans">
-                              First Name
-                            </label>
-                            <input
-                              type="text"
-                              value={firstName}
-                              onChange={(e) => setFirstName(e.target.value)}
-                              className="w-full px-5 py-3.5 rounded-2xl border border-slate-deep/10 dark:border-white/10 bg-white/60 dark:bg-slate-soft/10 text-slate-deep dark:text-white focus:outline-none focus:border-gold dark:focus:border-gold text-base font-medium transition-all shadow-sm"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-sm sm:text-base font-bold uppercase tracking-wider text-slate-deep/80 dark:text-white/60 block mb-2 font-sans">
-                              Last Name
-                            </label>
-                            <input
-                              type="text"
-                              value={lastName}
-                              onChange={(e) => setLastName(e.target.value)}
-                              className="w-full px-5 py-3.5 rounded-2xl border border-slate-deep/10 dark:border-white/10 bg-white/60 dark:bg-slate-soft/10 text-slate-deep dark:text-white focus:outline-none focus:border-gold dark:focus:border-gold text-base font-medium transition-all shadow-sm"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-sm sm:text-base font-bold uppercase tracking-wider text-slate-deep/80 dark:text-white/60 block mb-2 font-sans">
-                            Email Address
-                          </label>
-                          <input
-                            type="email"
-                            value={profileEmail}
-                            onChange={(e) => setProfileEmail(e.target.value)}
-                            className="w-full px-5 py-3.5 rounded-2xl border border-slate-deep/10 dark:border-white/10 bg-white/60 dark:bg-slate-soft/10 text-slate-deep dark:text-white focus:outline-none focus:border-gold dark:focus:border-gold text-base font-medium transition-all shadow-sm"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Current Plan Block */}
-                      <div className="max-w-2xl pt-6 border-t border-slate-deep/10 dark:border-white/10">
-                        <div className="p-6 rounded-2xl border border-gold/30 bg-gold/5 dark:bg-gold/5 space-y-4">
-                          <label className="text-xl sm:text-2xl font-black uppercase tracking-wider text-gold block font-sans">
-                            Current Plan
-                          </label>
-                          
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
-                            {/* Block 1: Plan Name */}
-                            <div className="p-4 rounded-xl bg-white/40 dark:bg-slate-soft/5 border border-slate-deep/5 dark:border-white/5">
-                              <span className="text-sm text-slate-gray/70 dark:text-white/55 uppercase font-extrabold tracking-wider block mb-1.5">Plan Package</span>
-                              <div className="text-xl sm:text-2xl font-black text-slate-deep dark:text-white">Premium Plan</div>
-                            </div>
-                            
-                            {/* Block 2: Price */}
-                            <div className="p-4 rounded-xl bg-white/40 dark:bg-slate-soft/5 border border-slate-deep/5 dark:border-white/5">
-                              <span className="text-sm text-slate-gray/70 dark:text-white/55 uppercase font-extrabold tracking-wider block mb-1.5">Pricing</span>
-                              <div className="text-xl sm:text-2xl font-black text-slate-deep dark:text-white">150,000đ <span className="text-sm font-bold text-slate-gray/60 dark:text-white/40">/ mo</span></div>
-                            </div>
-                            
-                            {/* Block 3: Renewal */}
-                            <div className="p-4 rounded-xl bg-white/40 dark:bg-slate-soft/5 border border-slate-deep/5 dark:border-white/5">
-                              <span className="text-sm text-slate-gray/70 dark:text-white/55 uppercase font-extrabold tracking-wider block mb-1.5">Renewal Date</span>
-                              <div className="text-xl sm:text-2xl font-black text-slate-deep dark:text-white">Aug 6, 2026</div>
-                            </div>
-                          </div>
-
-                          {/* Benefits / Features */}
-                          <div className="p-5 rounded-xl bg-white/40 dark:bg-slate-soft/5 border border-slate-deep/5 dark:border-white/5 space-y-3">
-                            <span className="text-sm sm:text-base text-slate-gray/70 dark:text-white/55 uppercase font-black tracking-wider block">Access Features</span>
-                            <ul className="grid grid-cols-1 gap-2 text-base sm:text-lg text-slate-deep/90 dark:text-white/80 font-sans leading-relaxed">
-                              {[
-                                "Everything in Basic Plan",
-                                "Docs-to-Simulation (PDF / document upload)",
-                                "Unlimited saved simulation scenes",
-                                "Export simulation as animated GIF",
-                                "Advanced force & constraint tools (springs, joints, hinges)",
-                                "Priority email support",
-                                "Early access to new simulation types"
-                              ].map((feature, i) => (
-                                <li key={i} className="flex items-start gap-2">
-                                  <span className="text-gold font-black mt-0.5">✓</span>
-                                  <span>{feature}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Bar */}
-                      <div className="mt-8 pt-6 border-t border-slate-deep/10 dark:border-white/10 flex justify-end items-center gap-4">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm("Are you sure you want to sign out?")) {
-                              alert("Signing out...");
-                              window.location.hash = "";
-                              window.location.reload();
-                            }
-                          }}
-                          className="px-6 py-3 rounded-2xl border border-red-500/20 hover:border-red-500/40 text-red-500 hover:bg-red-500/5 text-base font-bold transition-all active:scale-95 cursor-pointer"
-                        >
-                          Sign Out
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            localStorage.setItem("morphysics_first_name", firstName);
-                            localStorage.setItem("morphysics_last_name", lastName);
-                            localStorage.setItem("morphysics_profile_email", profileEmail);
-                            alert("Profile saved successfully!");
-                          }}
-                          className="px-6 py-3 rounded-2xl bg-gold hover:bg-gold-hover text-slate-deep font-extrabold text-base transition-all active:scale-95 flex items-center gap-2 shadow-md cursor-pointer"
-                        >
-                          <Check className="size-5" /> Save Profile
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {activeSettingsSubTab === "appearance" && (
-                    <motion.div
-                      key="appearance"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="space-y-8"
-                    >
-                      <div className="pb-3 border-b border-slate-deep/10 dark:border-white/10">
-                        <h3 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-                          <span className="font-sans text-slate-deep dark:text-white">Appearance & </span>
-                          <span className="font-display italic font-semibold text-gold">Theme.</span>
-                        </h3>
-                      </div>
-
-                      <div className="space-y-8 max-w-2xl">
-                        <div>
-                          <label className="text-sm sm:text-base font-bold uppercase tracking-wider text-slate-deep/80 dark:text-white/60 block mb-4 font-sans">
-                            Color Theme
-                          </label>
-                          <div className="grid grid-cols-2 gap-5 max-w-2xl">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                if (theme !== "light") toggleTheme(e);
-                              }}
-                              className={cn(
-                                "flex items-center justify-center gap-3 px-8 py-6 rounded-3xl border text-xl font-extrabold transition-all cursor-pointer shadow-md",
-                                theme === "light"
-                                  ? "border-gold bg-gold/15 text-gold"
-                                  : "border-slate-deep/10 dark:border-white/10 hover:border-gold/50"
-                              )}
-                            >
-                              <Sun className="size-6" /> Light Mode
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                if (theme !== "dark") toggleTheme(e);
-                              }}
-                              className={cn(
-                                "flex items-center justify-center gap-3 px-8 py-6 rounded-3xl border text-xl font-extrabold transition-all cursor-pointer shadow-md",
-                                theme === "dark"
-                                  ? "border-gold bg-gold/15 text-gold"
-                                  : "border-slate-deep/10 dark:border-white/10 hover:border-gold/50"
-                              )}
-                            >
-                              <Moon className="size-6" /> Dark Mode
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-6 py-5 border-t border-slate-deep/10 dark:border-white/10">
-                          <div>
-                            <p className="font-sans text-xl font-extrabold text-slate-deep dark:text-white">
-                              Show Physics Grid
-                            </p>
-                            <p className="text-base text-slate-gray dark:text-white/70 font-sans mt-1 leading-relaxed">
-                              Display background coordinate helper lines on active canvas.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = !simPrefs.showGrid;
-                              const newPrefs = { ...simPrefs, showGrid: updated };
-                              setSimPrefs(newPrefs);
-                              localStorage.setItem("morphysics_sim_prefs", JSON.stringify(newPrefs));
-                            }}
-                            className={cn(
-                              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-                              simPrefs.showGrid ? "bg-gold" : "bg-slate-deep/20 dark:bg-white/20"
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                                simPrefs.showGrid ? "translate-x-5" : "translate-x-0"
-                              )}
-                            />
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {activeSettingsSubTab === "simulation" && (
-                    <motion.div
-                      key="simulation"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="space-y-8"
-                    >
-                      <div className="pb-3 border-b border-slate-deep/10 dark:border-white/10">
-                        <h3 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-                          <span className="font-sans text-slate-deep dark:text-white">Simulation </span>
-                          <span className="font-display italic font-semibold text-gold">Prefs.</span>
-                        </h3>
-                      </div>
-
-                      <div className="space-y-6 max-w-2xl">
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <label className="text-sm sm:text-base font-bold uppercase tracking-wider text-slate-deep/80 dark:text-white/60 block font-sans">
-                              Default Gravity Value
-                            </label>
-                            <span className="text-base font-extrabold text-gold">
-                              {simPrefs.defaultGravity.toFixed(1)} m/s²
+              {phase2Data && loadingMode === 'idle' && (
+                <div className="px-6 py-5 border-t border-slate-deep/5 dark:border-white/5 bg-white/95 dark:bg-[#161929] shrink-0 space-y-4 relative z-20">
+                  {sliderStates.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {sliderStates.map((item) => (
+                        <div key={item.key} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 flex flex-col gap-1.5">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{item.label || item.key}</span>
+                            <span className="text-xs font-black text-gold">
+                              {stateValues[item.key] !== undefined ? stateValues[item.key].toFixed(2) : item.initial} {item.unit}
                             </span>
                           </div>
                           <input
                             type="range"
-                            min={0}
-                            max={20}
-                            step={0.5}
-                            value={simPrefs.defaultGravity}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value);
-                              const newPrefs = { ...simPrefs, defaultGravity: val };
-                              setSimPrefs(newPrefs);
-                              localStorage.setItem("morphysics_sim_prefs", JSON.stringify(newPrefs));
-                              setGravity(val);
-                            }}
-                            className="control-slider"
-                            style={{ "--progress": `${(simPrefs.defaultGravity / 20) * 100}%` } as React.CSSProperties}
+                            min={item.range?.[0]}
+                            max={item.range?.[1]}
+                            step="0.01"
+                            value={stateValues[item.key] ?? item.initial}
+                            onChange={(e) => handleSliderChange(item.key, Number(e.target.value))}
+                            className="w-full h-1 accent-gold cursor-pointer bg-slate-200 dark:bg-slate-700 rounded-lg"
                           />
                         </div>
-
-                        <div>
-                          <label className="text-sm sm:text-base font-bold uppercase tracking-wider text-slate-deep/80 dark:text-white/60 block mb-2 font-sans">
-                            Default Starting Lab
-                          </label>
-                          <select
-                            value={simPrefs.defaultScenario}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              const newPrefs = { ...simPrefs, defaultScenario: val };
-                              setSimPrefs(newPrefs);
-                              localStorage.setItem("morphysics_sim_prefs", JSON.stringify(newPrefs));
-                            }}
-                            className="w-full px-5 py-3.5 rounded-2xl border border-slate-deep/10 dark:border-white/10 bg-white/60 dark:bg-slate-soft/10 text-slate-deep dark:text-white focus:outline-none focus:border-gold dark:focus:border-gold text-base font-medium transition-all shadow-sm"
-                          >
-                            <option value="none">None (Idle Welcome State)</option>
-                            <option value="projectile">Projectile Launcher</option>
-                            <option value="pendulum">Double Pendulum</option>
-                            <option value="collisions">Elastic Collisions</option>
-                            <option value="orbit">Planetary Orbit</option>
-                          </select>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-6 py-5 border-t border-slate-deep/10 dark:border-white/10">
-                          <div>
-                            <p className="font-sans text-xl font-extrabold text-slate-deep dark:text-white">
-                              Auto-play Scenarios
-                            </p>
-                            <p className="text-base text-slate-gray dark:text-white/70 font-sans mt-1 leading-relaxed">
-                              Instantly start simulator ticks when switching scenarios.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = !simPrefs.autoPlay;
-                              const newPrefs = { ...simPrefs, autoPlay: updated };
-                              setSimPrefs(newPrefs);
-                              localStorage.setItem("morphysics_sim_prefs", JSON.stringify(newPrefs));
-                            }}
-                            className={cn(
-                              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-                              simPrefs.autoPlay ? "bg-gold" : "bg-slate-deep/20 dark:bg-white/20"
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                                simPrefs.autoPlay ? "translate-x-5" : "translate-x-0"
-                              )}
-                            />
-                          </button>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-6 py-5 border-t border-slate-deep/10 dark:border-white/10">
-                          <div>
-                            <p className="font-sans text-xl font-extrabold text-slate-deep dark:text-white">
-                              Show FPS Counter
-                            </p>
-                            <p className="text-base text-slate-gray dark:text-white/70 font-sans mt-1 leading-relaxed">
-                              Display dynamic rendering frames per second in the simulator header.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = !simPrefs.showFPS;
-                              const newPrefs = { ...simPrefs, showFPS: updated };
-                              setSimPrefs(newPrefs);
-                              localStorage.setItem("morphysics_sim_prefs", JSON.stringify(newPrefs));
-                            }}
-                            className={cn(
-                              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-                              simPrefs.showFPS ? "bg-gold" : "bg-slate-deep/20 dark:bg-white/20"
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                                simPrefs.showFPS ? "translate-x-5" : "translate-x-0"
-                              )}
-                            />
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
+                      ))}
+                    </div>
                   )}
 
-                  {activeSettingsSubTab === "notifications" && (
-                    <motion.div
-                      key="notifications"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="space-y-8"
-                    >
-                      <div className="pb-3 border-b border-slate-deep/10 dark:border-white/10">
-                        <h3 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-                          <span className="font-sans text-slate-deep dark:text-white">Tips & </span>
-                          <span className="font-display italic font-semibold text-gold">Notifications.</span>
-                        </h3>
-                      </div>
-
-                      <div className="space-y-6 max-w-2xl">
-                        <div className="flex items-center justify-between gap-6 py-3">
-                          <div>
-                            <p className="font-sans text-xl font-extrabold text-slate-deep dark:text-white">
-                              Simulation Tips & Suggestions
-                            </p>
-                            <p className="text-base text-slate-gray dark:text-white/70 font-sans mt-1 leading-relaxed">
-                              Receive interactive comments and tips from Morphysics mascot.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = !notifTips;
-                              setNotifTips(updated);
-                              localStorage.setItem("morphysics_notif_tips", String(updated));
-                            }}
-                            className={cn(
-                              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-                              notifTips ? "bg-gold" : "bg-slate-deep/20 dark:bg-white/20"
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                                notifTips ? "translate-x-5" : "translate-x-0"
-                              )}
-                            />
+                  {!!phase1Data?.plan?.snapshots?.length && (
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trạng thái mẫu:</span>
+                      <div className="flex gap-2 overflow-x-auto">
+                        {phase1Data.plan.snapshots.map((snapshot) => (
+                          <button key={snapshot.label} type="button" onClick={() => applySnapshot(snapshot)} className="px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 text-xs font-medium hover:bg-indigo-500/20 transition-all whitespace-nowrap">
+                            {snapshot.label}
                           </button>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-6 py-5 border-t border-slate-deep/10 dark:border-white/10">
-                          <div>
-                            <p className="font-sans text-xl font-extrabold text-slate-deep dark:text-white">
-                              Keyboard Shortcut Hints
-                            </p>
-                            <p className="text-base text-slate-gray dark:text-white/70 font-sans mt-1 leading-relaxed">
-                              Display helper tips for controls on active playground overlays.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = !notifHints;
-                              setNotifHints(updated);
-                              localStorage.setItem("morphysics_notif_hints", String(updated));
-                            }}
-                            className={cn(
-                              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-                              notifHints ? "bg-gold" : "bg-slate-deep/20 dark:bg-white/20"
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                                notifHints ? "translate-x-5" : "translate-x-0"
-                              )}
-                            />
-                          </button>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-6 py-5 border-t border-slate-deep/10 dark:border-white/10">
-                          <div>
-                            <p className="font-sans text-xl font-extrabold text-slate-deep dark:text-white">
-                              Auto-save Canvas Snapshots
-                            </p>
-                            <p className="text-base text-slate-gray dark:text-white/70 font-sans mt-1 leading-relaxed">
-                              Export a snapshot image automatically when the simulation resets.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = !notifAutoSave;
-                              setNotifAutoSave(updated);
-                              localStorage.setItem("morphysics_notif_autosave", String(updated));
-                            }}
-                            className={cn(
-                              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-                              notifAutoSave ? "bg-gold" : "bg-slate-deep/20 dark:bg-white/20"
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                                notifAutoSave ? "translate-x-5" : "translate-x-0"
-                              )}
-                            />
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {activeSettingsSubTab === "privacy" && (
-                    <motion.div
-                      key="privacy"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="space-y-8"
-                    >
-                      <div className="pb-3 border-b border-slate-deep/10 dark:border-white/10">
-                        <h3 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-                          <span className="font-sans text-slate-deep dark:text-white">Privacy & </span>
-                          <span className="font-display italic font-semibold text-gold">Local Data.</span>
-                        </h3>
-                      </div>
-
-                      <div className="space-y-6 max-w-2xl">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-3">
-                          <div>
-                            <p className="font-sans text-xl font-extrabold text-slate-deep dark:text-white">
-                              Clear Chat Logs
-                            </p>
-                            <p className="text-base text-slate-gray dark:text-white/70 font-sans mt-1 leading-relaxed">
-                              Remove all messaging logs and reset AI state back to defaults.
-                            </p>
-                          </div>
-                          {!confirmClearChat ? (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmClearChat(true)}
-                              className="px-5 py-2.5 rounded-xl border border-slate-deep/15 dark:border-white/15 hover:border-red-400 hover:text-red-400 text-slate-deep dark:text-white text-sm font-bold transition-all active:scale-95 cursor-pointer"
-                            >
-                              Clear Chat
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  handleClearChat();
-                                  setConfirmClearChat(false);
-                                }}
-                                className="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold active:scale-95 cursor-pointer shadow-sm"
-                              >
-                                Confirm
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmClearChat(false)}
-                                className="px-4 py-2 rounded-xl bg-slate-soft dark:bg-white/10 text-slate-deep dark:text-white text-sm font-bold cursor-pointer"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-5 border-t border-slate-deep/10 dark:border-white/10">
-                          <div>
-                            <p className="font-sans text-xl font-extrabold text-slate-deep dark:text-white">
-                              Reset Simulator Prefs
-                            </p>
-                            <p className="text-base text-slate-gray dark:text-white/70 font-sans mt-1 leading-relaxed">
-                              Restore all defaults for gravity values, timers, and grids.
-                            </p>
-                          </div>
-                          {!confirmResetPrefs ? (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmResetPrefs(true)}
-                              className="px-5 py-2.5 rounded-xl border border-slate-deep/15 dark:border-white/15 hover:border-red-400 hover:text-red-400 text-slate-deep dark:text-white text-sm font-bold transition-all active:scale-95 cursor-pointer"
-                            >
-                              Reset
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const defaults = {
-                                    defaultGravity: 9.8,
-                                    autoPlay: true,
-                                    showFPS: true,
-                                    showGrid: true,
-                                    defaultScenario: "none"
-                                  };
-                                  setSimPrefs(defaults);
-                                  setGravity(9.8);
-                                  localStorage.setItem("morphysics_sim_prefs", JSON.stringify(defaults));
-                                  setConfirmResetPrefs(false);
-                                  alert("Simulator preferences reset!");
-                                }}
-                                className="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold active:scale-95 cursor-pointer shadow-sm"
-                              >
-                                Confirm
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmResetPrefs(false)}
-                                className="px-4 py-2 rounded-xl bg-slate-soft dark:bg-white/10 text-slate-deep dark:text-white text-sm font-bold cursor-pointer"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-5 border-t border-slate-deep/10 dark:border-white/10">
-                          <div>
-                            <p className="font-sans text-xl font-extrabold text-slate-deep dark:text-white">
-                              Clear All Storage
-                            </p>
-                            <p className="text-base text-slate-gray dark:text-white/70 font-sans mt-1 leading-relaxed">
-                              Wipe all user parameters, cached profiles, and settings.
-                            </p>
-                          </div>
-                          {!confirmClearAll ? (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmClearAll(true)}
-                              className="px-5 py-2.5 rounded-xl border border-red-500/20 bg-red-500/5 hover:bg-red-500 hover:text-white text-red-500 text-sm font-bold transition-all active:scale-95 cursor-pointer"
-                            >
-                              Wipe Storage
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  localStorage.clear();
-                                  setConfirmClearAll(false);
-                                  window.location.reload();
-                                }}
-                                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold active:scale-95 cursor-pointer shadow-sm"
-                              >
-                                Wipe
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmClearAll(false)}
-                                className="px-4 py-2 rounded-xl bg-slate-soft dark:bg-white/10 text-slate-deep dark:text-white text-sm font-bold cursor-pointer"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {activeSettingsSubTab === "about" && (
-                    <motion.div
-                      key="about"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="space-y-8"
-                    >
-                      <div className="pb-3 border-b border-slate-deep/10 dark:border-white/10">
-                        <h3 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-                          <span className="font-sans text-slate-deep dark:text-white">About </span>
-                          <span className="font-display italic font-semibold text-gold">Morphysics.</span>
-                        </h3>
-                      </div>
-
-                      <div className="space-y-6 max-w-2xl">
-                        <div className="flex items-center gap-5">
-                          <div className="size-16 flex items-center justify-center rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/20 p-1 border border-gold/25 shrink-0 shadow-sm">
-                            <Player
-                              autoplay
-                              loop
-                              src="/assets/Mascot.json"
-                              style={{ height: "48px", width: "48px" }}
-                            />
-                          </div>
-                          <div>
-                            <p className="font-display italic font-bold text-2xl text-gold leading-none">
-                              Morphysics Lab
-                            </p>
-                            <p className="text-base text-slate-gray/70 dark:text-white/40 mt-1.5 font-sans font-medium">
-                              Version 1.0.0 (Local Sandbox Build)
-                            </p>
-                          </div>
-                        </div>
-
-                        <p className="text-lg text-slate-gray dark:text-white/70 leading-relaxed font-sans pt-2">
-                          Morphysics transforms abstract physics problems into real-time, interactive 2D simulations instantly using advanced mathematical solvers and custom canvas renders.
-                        </p>
-
-                        <div className="flex items-center justify-center gap-3 my-6">
-                          <div className="h-[1px] w-16 bg-slate-deep/15 dark:bg-white/10" />
-                          <div className="h-2 w-2 rounded-full bg-gold" />
-                          <div className="h-[1px] w-16 bg-slate-deep/15 dark:bg-white/10" />
-                        </div>
-
-                        <div className="flex flex-col gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setShowPolicy(true)}
-                            className="w-full py-3 rounded-2xl border border-slate-deep/10 dark:border-white/10 hover:border-gold hover:text-gold text-slate-deep dark:text-white text-sm font-bold transition-all active:scale-98 cursor-pointer bg-white/40 dark:bg-white/5 hover:bg-white/60"
-                          >
-                            Read Educational & Privacy Policy
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-            </div>
-
-            {/* Policy Overlay Modal (reused styling from original policy page, but compact & inside Settings) */}
-            <AnimatePresence>
-              {showPolicy && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className="card-surface relative overflow-hidden rounded-3xl p-8 sm:p-10 shadow-2xl border border-gold/20 dark:border-gold/10 bg-white dark:bg-[#1f2236] max-w-2xl w-full"
-                  >
-                    <div className="absolute top-0 right-0 w-32 h-32 rounded-bl-full bg-gold/10 dark:bg-gold/5 pointer-events-none" />
-                    <div className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full bg-gold/10 blur-3xl" />
-                    <div className="pointer-events-none absolute -left-24 -bottom-24 h-48 w-48 rounded-full bg-indigo-500/10 blur-3xl" />
-
-                    <h2 className="text-3xl font-extrabold tracking-tight mb-6">
-                      <span className="font-sans text-slate-deep dark:text-white">Privacy & </span>
-                      <span className="font-display italic font-semibold text-gold">Educational Policy.</span>
-                    </h2>
-
-                    <div className="space-y-5 text-base text-slate-gray dark:text-white/70 leading-relaxed font-sans max-h-[50vh] overflow-y-auto pr-2">
-                      <div>
-                        <h3 className="font-bold text-slate-deep dark:text-white text-lg mb-1">
-                          1. Educational Scope & Integrity
-                        </h3>
-                        <p className="text-base">
-                          MorPhysics is an interactive sandbox application designed to help secondary and high school students visualize abstract physics concepts. All simulation calculations are double-checked with High School physics textbooks in Vietnam and calibrated under advisor guidance (HCMUT).
-                        </p>
-                      </div>
-
-                      <div>
-                        <h3 className="font-bold text-slate-deep dark:text-white text-lg mb-1">
-                          2. Privacy & Data Protection
-                        </h3>
-                        <p className="text-base">
-                          We protect and value user privacy. Any uploaded logs, simulation parameters, and custom AI chat requests are compiled safely and local storage caches are only saved on-device. We do not transfer personal profiles to unauthorized third-party trackers.
-                        </p>
-                      </div>
-
-                      <div>
-                        <h3 className="font-bold text-slate-deep dark:text-white text-lg mb-1">
-                          3. Fair Usage of Simulation Resources
-                        </h3>
-                        <p className="text-base">
-                          Free tier student accounts are granted full access to 2D Thermodynamics and Electromagnetism modules. To avoid performance degradation, complex physics loops are optimized client-side (leveraging canvas threads and CPU engines), keeping the system highly efficient.
-                        </p>
+                        ))}
                       </div>
                     </div>
-
-                    <div className="mt-8 pt-5 border-t border-slate-deep/10 dark:border-white/10 flex justify-between items-center">
-                      <span className="text-[10px] text-slate-gray/50 dark:text-white/40">
-                        Last updated: July 2026 • Version 1.0.0
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setShowPolicy(false)}
-                        className="px-4 py-2 rounded-xl bg-gold hover:bg-gold-hover text-slate-deep font-bold text-xs transition-all active:scale-95"
-                      >
-                        Close Policy
-                      </button>
-                    </div>
-                  </motion.div>
+                  )}
                 </div>
               )}
-            </AnimatePresence>
+            </div>
+          </div>
+        ) : (
+          <div className="h-full w-full flex flex-col md:flex-row overflow-hidden relative">
+            <div className="w-full md:w-[290px] shrink-0 bg-slate-soft/30 dark:bg-[#171a2e]/45 backdrop-blur-md p-8 flex flex-col justify-between border-b md:border-b-0 md:border-r border-slate-deep/10 dark:border-white/10 relative z-10">
+              <div className="space-y-8">
+                 <div className="flex flex-col items-center text-center">
+                   <div className="relative h-24 w-24 mb-4">
+                     <div className="h-full w-full rounded-full bg-slate-deep/5 dark:bg-white/10 border-2 border-gold/50 flex items-center justify-center text-3xl text-gold font-bold shadow-lg">
+                       TLQ
+                     </div>
+                   </div>
+                   <h4 className="text-base font-semibold text-slate-gray/80 dark:text-white/60 mt-1 truncate max-w-full px-2">{lastName} {firstName}</h4>
+                 </div>
+                <div className="h-[1px] w-full bg-slate-deep/10 dark:bg-white/10" />
+                <nav className="space-y-2">
+                  <button type="button" className="w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-sm font-bold text-left bg-gold text-slate-deep shadow-md">
+                    <User className="size-5 shrink-0" />
+                    <span>Hồ Sơ Cá Nhân</span>
+                  </button>
+                </nav>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 sm:p-10 max-w-4xl">
+              <div className="space-y-6">
+                <h3 className="text-2xl font-bold">Cài đặt tài khoản</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold block mb-1">Tên</label>
+                    <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold block mb-1">Họ</label>
+                    <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold block mb-1">Địa chỉ Email</label>
+                  <input type="email" value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-sm" />
+                </div>
+                <button type="button" onClick={() => alert("Đã lưu!")} className="px-4 py-2 bg-gold text-slate-deep rounded-xl font-bold text-sm">Cập nhật</button>
+              </div>
+            </div>
           </div>
         )}
       </div>
-
     </section>
   );
 }
-
-export default Dashboard;
