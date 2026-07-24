@@ -123,23 +123,23 @@ Morphysics---Frontend/
 │   ├── Interactive Lab Page.jpg
 │   ├── Assets Page.jpg
 │   └── Login Page.jpg
-├── frontend/
-│   ├── public/                  # Static assets, logos, and Lottie mascot animations
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── layout/          # Symmetrical capsule navbar, spotlight navigation, footer
-│   │   │   ├── physics/         # Matter.js canvas, vector visualizers, spring renderers
-│   │   │   ├── playground/      # Physics preset scenarios and textbook helpers
-│   │   │   └── ui/              # Glass panels, ThemeToggle, Reveal wrappers, buttons
-│   │   ├── sections/            # Hero, About, Assets, Dashboard, FAQ, Login, Signup, Pricing
-│   │   ├── hooks/               # useTheme (View Transitions API switcher), usePhysics
-│   │   ├── data/                # Landing page content, syllabus data, FAQ repository
-│   │   ├── lib/                 # Utility functions (cn class merge helper)
-│   │   └── styles/              # Custom Tailwind directives and animation rules
-│   ├── index.html
-│   ├── tailwind.config.js
-│   ├── tsconfig.json
-│   └── vite.config.ts
+├── public/                      # Static assets, logos, and Lottie mascot animations
+├── src/
+│   ├── components/
+│   │   ├── layout/              # Symmetrical capsule navbar, spotlight navigation, footer
+│   │   ├── physics/             # Matter.js canvas, vector visualizers, spring renderers
+│   │   ├── playground/          # Physics preset scenarios and textbook helpers
+│   │   └── ui/                  # Glass panels, ThemeToggle, Reveal wrappers, buttons
+│   ├── sections/                # Hero, About, Assets, Dashboard, FAQ, Login, Signup, Pricing
+│   ├── services/                # Lab API integration & schemas
+│   ├── hooks/                   # useTheme (View Transitions API switcher), usePhysics
+│   ├── data/                    # Landing page content, syllabus data, FAQ repository
+│   ├── lib/                     # Utility functions (cn class merge helper)
+│   └── styles/                  # Custom Tailwind directives and animation rules
+├── index.html
+├── tailwind.config.js
+├── tsconfig.json
+├── vite.config.ts
 └── README.md                    # Repository documentation
 ```
 
@@ -155,7 +155,7 @@ Ensure you have **Node.js** (v18.0.0 or higher) and **npm** installed on your sy
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/your-username/Morphysics---Frontend.git
-   cd Morphysics---Frontend/frontend
+   cd Morphysics---Frontend
    ```
 
 2. **Install project dependencies:**
@@ -173,7 +173,7 @@ Ensure you have **Node.js** (v18.0.0 or higher) and **npm** installed on your sy
    ```bash
    npm run build
    ```
-   The optimized production bundle will be generated in the `frontend/dist/` directory.
+   The optimized production bundle will be generated in the `dist/` directory.
 
 5. **Preview the production build locally:**
    ```bash
@@ -190,5 +190,3 @@ Ensure you have **Node.js** (v18.0.0 or higher) and **npm** installed on your sy
 * **📍 Cursor Spotlight Ambience:** Computes dynamic CSS variables (`--spotlight-x`, `--spotlight-y`) in React hooks to power interactive radial lighting effects across glassmorphic containers.
 
 ---
-
-
