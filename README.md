@@ -1,56 +1,113 @@
+<div align="center">
+
 # Morphysics — Make the Static Dynamic
 
-**Morphysics** is a modern, interactive, and AI-inspired educational platform designed to transform abstract physics concepts from textbooks into real-time, customizable 2D simulations. It is built to support students, teachers, and educational institutions in Vietnam (specifically tailored to the high school physics curriculum) by replacing static diagrams with dynamic, interactive visual labs.
+**Transforming static physics equations into real-time, interactive, AI-driven 2D web simulations.**
+
+[![React](https://img.shields.io/badge/React-18.x-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-5.x-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.x-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Matter.js](https://img.shields.io/badge/Matter.js-2D_Physics-4B5563?style=for-the-badge&logo=javascript&logoColor=white)](https://brm.io/matter-js/)
+[![Framer Motion](https://img.shields.io/badge/Framer_Motion-11.x-0055FF?style=for-the-badge&logo=framer&logoColor=white)](https://www.framer.com/motion/)
+
+[Key Features](#-key-features) · [Visual Showcase](#-visual-showcase) · [Tech Stack](#-tech-stack) · [Project Structure](#-project-structure) · [Getting Started](#-getting-started)
+
+</div>
+
+---
+
+## 📖 Overview
+
+**Morphysics** is a next-generation educational web platform designed to replace static textbook diagrams with dynamic, interactive visual labs. Built specifically to support students, educators, and institutions in Vietnam by aligning with high school AP/IB physics curricula, Morphysics enables users to experiment with physical forces, motion, electromagnetism, and energy conservation in real time.
+
+Combining a **custom Matter.js 2D simulation engine**, **AI-assisted document-to-simulation generation**, and a **state-of-the-art glassmorphic design system**, Morphysics turns passive formula reading into active, visual discovery.
+
+---
+
+## 📸 Visual Showcase
+
+### 🌟 Landing Page (Light & Dark Modes)
+Morphysics features a full-spectrum glassmorphic UI with dynamic theme transitions, ambient particle canvas background, interactive solenoid electromagnetism visualizer, and student review carousels.
+
+<div align="center">
+  <img src="./Images/LandingPage_Darkmode.jpg" alt="Morphysics Landing Page - Dark Mode" width="49%" />
+  <img src="./Images/LandingPage_Lightmode.jpg" alt="Morphysics Landing Page - Light Mode" width="49%" />
+</div>
+
+<br />
+
+### 🔬 Interactive Physics Lab Dashboard (`#dashboard`)
+The core visual lab environment featuring a split-screen layout: an **AI Physics Assistant** with PDF/Document upload support on the left, and an interactive **Matter.js 2D Physics Canvas** on the right, managed by a symmetrical expanding capsule navigation bar.
+
+<div align="center">
+  <img src="./Images/Interactive%20Lab%20Page.jpg" alt="Morphysics Interactive Lab Dashboard" width="100%" />
+</div>
+
+<br />
+
+### 📚 Educational Assets Store (`#assets`)
+A comprehensive catalog of downloadable textbook worksheets, ready-made simulation setups, formula cheat-sheets, and interactive physics exercise packs.
+
+<div align="center">
+  <img src="./Images/Assets%20Page.jpg" alt="Morphysics Assets Store" width="100%" />
+</div>
+
+<br />
+
+### 🔐 Authentication System (`#login` / `#signup`)
+Sleek, responsive authentication interfaces featuring animated input states, validation feedback, and seamless session onboarding.
+
+<div align="center">
+  <img src="./Images/Login%20Page.jpg" alt="Morphysics Login & Authentication" width="100%" />
+</div>
+
+<br />
+
+### 💡 Features Breakdown & Pricing Overview
+Detailed comparison detailing textbook challenges vs. Morphysics interactive solvers, along with transparent subscription plans.
+
+<div align="center">
+  <img src="./Images/LandingPage_2.jpg" alt="Morphysics Features Breakdown" width="49%" />
+  <img src="./Images/LandingPage_3.jpg" alt="Morphysics Pricing & Showcase" width="49%" />
+</div>
 
 ---
 
 ## 🚀 Key Product Features
 
-### 1. Unified Landing & Marketing Page
-* **Hero & Interactive Solenoid Coil:** High-fidelity simulation demonstrating electromagnetism principles directly in the hero zone.
-* **Partners & Testimonials:** Integrated partner carousel and student review swiper powered by **Swiper.js**.
-* **Problem & Solution Breakdowns:** Graphical showcases detailing current textbook challenges and the Morphysics interactive solver.
-* **Pricing Plans:** Transparent tiered pricing model displaying details of Basic and Premium features.
+### 1. 🧪 Interactive Physics Lab (`#dashboard`)
+* **Split-Screen Visual Workspace:**
+  * **Left Panel — AI Physics Assistant:** Conversational AI assistant supporting quick suggestion triggers ("Simulate Gravity", "Explain Force") and PDF/document uploads to dynamically generate physics scenarios.
+  * **Right Panel — Matter.js 2D Simulation Engine:** Interactive canvas allowing creation of circles, boxes, springs, rope constraints, and joint hinges with real-time vector visualizers (velocity, force vectors, grid lines).
+* **Symmetrical Dynamic Capsule Navbar:**
+  * Floating pill navigation with spring-physics hover expansion (`stiffness: 380, damping: 30`) without layout snapping.
+* **Preset Scenario Selector:** One-click instant loading for classic physics experiments: Free Fall, Double Pendulum, Newton’s Cradle, Soft-Body Mesh, and Inclined Plane.
 
-### 2. Specialized Subpages
-* **About Us (`#about`):** Shares the educational mission, teaching philosophies, and design system.
-* **FAQ Page (`#faq`):** Detailed repository of common questions, usage policies, physics engine parameter guides, and troubleshooting tips.
-* **Assets Store (`#assets`):** Catalog of downloadable textbook worksheets, ready-made simulation setups, and interactive physics formulas.
-* **Authentication (`#login` / `#signup`):** Highly responsive, modern login and registration forms featuring validation feedback.
+### 2. 🌐 Unified Landing & Marketing Page
+* **Hero & Interactive Solenoid Coil:** High-fidelity interactive electromagnetic field visualizer directly inside the hero section.
+* **Curriculum Alignment:** Aligned with physics syllabus standards (Classical Mechanics, Thermodynamics, Electromagnetism).
+* **Swiper.js Testimonials & Partner Showcase:** Touch-enabled student feedback carousels and university partner wall.
+* **Transparent Pricing:** Clear tiered subscription models (Basic vs. Premium) with docs-to-sim entitlement listings.
 
-### 3. Interactive Lab Dashboard (`#dashboard`)
-The dashboard is designed as a split-screen visual lab containing:
-* **Dynamic Center Floating Navbar:**
-  * Symmetrical Dynamic Capsule: Center-aligned floating pill layout containing the branding logo, navigation buttons, and theme toggler.
-  * Hover Expansion: Buttons dynamically expand horizontally on hover (`Interactive Lab` expands left, `Settings` expands right) using spring physics (`stiffness: 380, damping: 30`) without layout snapping.
-* **Left Panel: AI Physics Assistant:**
-  * Intelligent Chatbot: Interactive conversation box with quick-suggestion triggers (e.g. "Simulate Gravity", "Explain Force").
-  * File Attachment: Integrated PDF and document uploader to generate physics scenarios dynamically.
-  * Embedded Asset and FAQ quick-access tabs inside the sidebar interface.
-* **Right Panel: Matter.js Simulation Engine:**
-  * Shape Spawner: Create circles, boxes, springs, rope constraints, and joint hinges.
-  * Physics Inspector: Modify physics parameters (gravity vector, time steps) and select pre-built scenarios (Free fall, Pendulum, Newton's cradle, Inclined plane).
-  * Real-Time Visualizer: Toggle vectors (force, velocity), bounding boxes, grid lines, and temperature sensors.
-
-### 4. Advanced Settings Panel
-* **Sidebar Profile:** Prominent gold-styled welcome banner (`Welcome, Long Quan`), avatar, and a subscription status badge displaying `Premium Plan`.
-* **Account tab:** First and Last name inputs (defaulting to "Long Quan" and "Ton"), alongside a dedicated **Current Plan** box listing full benefits (Docs-to-Simulation, exports, constraints, support).
-* **Appearance tab:** Enlarged, easy-to-click premium glass toggles for Light and Dark theme modes.
-* **Interactive Configuration:** Fine-tune gravity settings, scenario presets, notification toggles, clear cache utilities, and view legal education policies.
+### 3. ⚙️ Advanced Settings & Profile Customization
+* **Personalized User Profile:** Sidebar welcome banner (`Welcome, Long Quan`), custom avatars, and subscription status badges (`Premium Plan`).
+* **Circular Theme Switcher:** Smooth circular mask expansion theme toggle leveraging browser View Transitions API and CSS clip-paths.
+* **Engine Customization:** Fine-tune gravity vectors, time-steps, notification triggers, and cache clearance tools.
 
 ---
 
 ## 🛠 Tech Stack
 
-| Layer | Choice | Description |
+| Layer | Technology | Purpose |
 |---|---|---|
-| **Framework** | **React 18** | Declarative component UI structure and state management |
-| **Language** | **TypeScript** | Strict typing for physics states and layout configurations |
-| **Build Tool** | **Vite 5** | High-performance developer server and builds |
-| **Physics Engine** | **Matter.js** & Canvas | 2D rigid-body dynamics engine and customized equation solvers |
-| **Styling** | **Tailwind CSS 3** | Utility-first styling with custom dark/light theme variables |
-| **Animations** | **Framer Motion** | Fluid layout transitions and scroll-based triggers |
-| **Interactive Widgets** | **Swiper** & **NumberFlow** | Premium testimonial carousels and smooth count-up transitions |
+| **Core Framework** | **React 18** | Declarative component UI hierarchy and reactive state management |
+| **Language** | **TypeScript 5** | Strict type safety for physics payloads, hooks, and UI props |
+| **Build Engine** | **Vite 5** | Instant HMR, ultra-fast development server, and optimized bundling |
+| **Physics Engine** | **Matter.js & HTML5 Canvas** | 2D rigid-body dynamics, constraint satisfaction, and vector visualizer |
+| **Styling System** | **Tailwind CSS 3** | Custom design tokens, glassmorphism utilities, and dark/light variables |
+| **Animations** | **Framer Motion 11** | Spring-based layout transitions, capsule nav expansions, and scroll reveals |
+| **Interactive Widgets** | **Swiper.js & Lottie** | Touch-enabled testimonial carousels and animated mascot visuals |
 
 ---
 
@@ -58,66 +115,80 @@ The dashboard is designed as a split-screen visual lab containing:
 
 ```text
 Morphysics---Frontend/
+├── Images/                      # Product showcase images
+│   ├── LandingPage_Lightmode.jpg
+│   ├── LandingPage_Darkmode.jpg
+│   ├── LandingPage_2.jpg
+│   ├── LandingPage_3.jpg
+│   ├── Interactive Lab Page.jpg
+│   ├── Assets Page.jpg
+│   └── Login Page.jpg
 ├── frontend/
-│   ├── public/
-│   │   ├── assets/              # Logos, photos, and Lottie mascot files
-│   │   └── favicon.svg          # App favicon
+│   ├── public/                  # Static assets, logos, and Lottie mascot animations
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── layout/          # Spotlight navigation and footer components
-│   │   │   ├── physics/         # Matter.js Canvas and 3D Spring-Mass renderer
-│   │   │   ├── playground/      # Grade 10 textbook demos and physics helpers
-│   │   │   └── ui/              # Buttons, ThemeToggle, and Reveal wrapper hooks
+│   │   │   ├── layout/          # Symmetrical capsule navbar, spotlight navigation, footer
+│   │   │   ├── physics/         # Matter.js canvas, vector visualizers, spring renderers
+│   │   │   ├── playground/      # Physics preset scenarios and textbook helpers
+│   │   │   └── ui/              # Glass panels, ThemeToggle, Reveal wrappers, buttons
 │   │   ├── sections/            # Hero, About, Assets, Dashboard, FAQ, Login, Signup, Pricing
-│   │   ├── hooks/               # useTheme (Circle-reveal view transitions switcher)
-│   │   ├── data/                # Landing page copy, plans data, and FAQ structures (content.ts)
-│   │   ├── lib/                 # Utility helpers (cn class merge helper)
-│   │   └── styles/              # Tailwind directives and custom animation styles
+│   │   ├── hooks/               # useTheme (View Transitions API switcher), usePhysics
+│   │   ├── data/                # Landing page content, syllabus data, FAQ repository
+│   │   ├── lib/                 # Utility functions (cn class merge helper)
+│   │   └── styles/              # Custom Tailwind directives and animation rules
 │   ├── index.html
 │   ├── tailwind.config.js
 │   ├── tsconfig.json
 │   └── vite.config.ts
-└── README.md                    # Root project documentation (this file)
+└── README.md                    # Repository documentation
 ```
 
 ---
 
-## 🚀 Getting Started
+## ⚡ Getting Started
 
-To run the Morphysics frontend application locally, make sure you have [Node.js](https://nodejs.org/) installed, and follow these steps:
+### Prerequisites
+Ensure you have **Node.js** (v18.0.0 or higher) and **npm** installed on your system.
 
-1. **Clone the repository** and navigate into the `frontend` folder:
+### Quick Setup
+
+1. **Clone the repository:**
    ```bash
-   cd frontend
+   git clone https://github.com/your-username/Morphysics---Frontend.git
+   cd Morphysics---Frontend/frontend
    ```
 
-2. **Install dependencies**:
+2. **Install project dependencies:**
    ```bash
    npm install
    ```
 
-3. **Run the development server**:
+3. **Start the local development server:**
    ```bash
    npm run dev
    ```
-   Open [http://localhost:5173](http://localhost:5173) in your browser.
+   Open your browser and visit `http://localhost:5173`.
 
-4. **Build for production**:
+4. **Build for production:**
    ```bash
    npm run build
    ```
-   This generates an optimized static bundle inside the `dist/` directory.
+   The optimized production bundle will be generated in the `frontend/dist/` directory.
 
-5. **Preview the production build locally**:
+5. **Preview the production build locally:**
    ```bash
    npm run preview
    ```
 
 ---
 
-## 💡 Architectural Highlights
+## 💡 Engineering & Architectural Highlights
 
-* **Ref-Driven Physics loops:** To maintain high framerates on lower-spec student devices, all textbook simulation canvases run coordinate computations inside React `useRef` states. This prevents costly component re-renders on every animation frame.
-* **Circular Reveal View Transitions:** Leverages the browser's native `document.startViewTransition` API combined with CSS clip-paths to transition themes smoothly from the cursor pointer's exact coordinates.
-* **Symmetrical Expanding Capsule Navigation:** Employs synchronized Framer Motion layouts that smoothly expand capsule widths on hover without causing layout jumps or snapping by maintaining a constant padding constraint.
-* **Spotlight Navigation:** Tracks the cursor position with vanilla CSS variables (`--spotlight-x`, `--ambience-x`) updated in React to direct radial gradients.
+* **🚀 Ref-Driven Physics Engine Loop:** To guarantee 60 FPS performance on lower-spec student devices, all Matter.js rigid-body coordinates and force calculations bypass React component state re-renders using persistent React `useRef` loops.
+* **🎨 Circular Reveal View Transitions:** Implements smooth theme switching via `document.startViewTransition()` combined with radial CSS clip-paths expanding directly from the user's cursor click position.
+* **💎 Symmetrical Dynamic Capsule Navigation:** Employs Framer Motion layout springs to dynamically expand capsule width on hover without introducing layout shift or snapping bugs.
+* **📍 Cursor Spotlight Ambience:** Computes dynamic CSS variables (`--spotlight-x`, `--spotlight-y`) in React hooks to power interactive radial lighting effects across glassmorphic containers.
+
+---
+
+
